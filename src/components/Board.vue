@@ -1,6 +1,5 @@
 <script lang="ts" setup>
-import { computed } from "vue";
-import { ref } from "vue";
+import { computed, nextTick, onMounted, ref } from "vue";
 import Column from "@/components/Column.vue";
 import { useBoardStore } from "@/stores/board";
 
@@ -25,6 +24,11 @@ const dropCard = (targetColumnId: string, targetIndex: number) => {
   }
   stopDragging();
 };
+
+onMounted(() => {
+  const cardId = new URLSearchParams(window.location.search).get("card");
+  if (cardId) void nextTick(() => document.getElementById(cardId)?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }));
+});
 </script>
 
 <template>

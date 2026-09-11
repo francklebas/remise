@@ -1,7 +1,8 @@
 <script lang="ts" setup>
 import { useBoardStore } from "@/stores/board";
-import { Check, ChevronDown, LayoutDashboard, LogOut, Plus, Search, Sparkles } from "@lucide/vue";
+import { Check, ChevronDown, LayoutDashboard, LogOut, Plus, Search, Sparkles, UserRound } from "@lucide/vue";
 import { useAuthStore } from "@/stores/auth";
+import { navigate } from "@/router";
 
 const store = useBoardStore();
 const auth = useAuthStore();
@@ -46,9 +47,10 @@ const auth = useAuthStore();
         <button class="btn btn-circle btn-ghost btn-sm" aria-label="Assistant">
           <Sparkles :size="18" />
         </button>
-        <button class="btn btn-circle btn-ghost btn-sm" aria-label="Se déconnecter" title="Se déconnecter" @click="auth.signOut">
-          <LogOut :size="18" />
+        <button class="btn btn-circle btn-ghost btn-sm" aria-label="Ouvrir mon espace utilisateur" title="Mon espace utilisateur" @click="navigate('/user')">
+          <UserRound :size="18" />
         </button>
+        <button class="btn btn-circle btn-ghost btn-sm" aria-label="Se déconnecter" title="Se déconnecter" @click="auth.signOut"><LogOut :size="18" /></button>
       </div>
     </div>
   </header>

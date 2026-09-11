@@ -1,9 +1,12 @@
 import { defineStore } from "pinia";
 import { v4 } from "uuid";
 import { computed, ref } from "vue";
-import type { Card, Column, Workspace } from "@/types/board";
+import type { Card, Column, TaskNotificationAction, Workspace } from "@/types/board";
+import { supabase } from "@/lib/supabase";
+import { useAuthStore } from "@/stores/auth";
 
 export const useBoardStore = defineStore("board", () => {
+  const auth = useAuthStore();
   const workspaces: Workspace[] = [
     { id: "personal", name: "Personnel", color: "bg-primary" },
     { id: "studio", name: "Studio créatif", color: "bg-secondary" },
@@ -80,7 +83,7 @@ export const useBoardStore = defineStore("board", () => {
 
     if (!column) return;
 
-    column.cards.push({
+    const card: Card = {
       id: v4(),
       title: "Nouvelle tâche",
       description: "",
@@ -90,13 +93,36 @@ export const useBoardStore = defineStore("board", () => {
       estimatedDuration: null,
       complexity: "medium",
       columnId,
-    });
+    };
+    column.cards.push(card);
+    void sendTaskNotification(card, "created");
   }
 
   function updateCard(columnId: string, cardId: string, patch: Partial<Pick<Card, "title" | "description" | "dueDate" | "dueTime" | "estimatedDuration" | "complexity">>) {
     const column = columns.value.find((item) => item.id === columnId);
     const card = column?.cards.find((item) => item.id === cardId);
-    if (card) Object.assign(card, patch);
+    if (card) {
+      Object.assign(card, patch);
+      void sendTaskNotification(card, "updated");
+    }
+  }
+
+  async function sendTaskNotification(card: Card, action: TaskNotificationAction) {
+    if (!supabase || !auth.notificationsEnabled) return;
+    await supabase.functions.invoke("send-task-notification", {
+      body: {
+        action,
+        task: {
+          id: card.id,
+          title: card.title,
+          description: card.description,
+          dueDate: card.dueDate,
+          dueTime: card.dueTime,
+          estimatedDuration: card.estimatedDuration,
+          complexity: card.complexity,
+        },
+      },
+    });
   }
 
   function removeCard(columnId: string, cardId: string) {

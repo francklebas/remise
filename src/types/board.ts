@@ -18,6 +18,8 @@ export interface Card {
 
 export type CardComplexity = "low" | "medium" | "high";
 
+export type TaskNotificationAction = "created" | "updated";
+
 export interface Workspace {
   id: string;
   name: string;
