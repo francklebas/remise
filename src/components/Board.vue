@@ -1,10 +1,30 @@
 <script lang="ts" setup>
 import { computed } from "vue";
+import { ref } from "vue";
 import Column from "@/components/Column.vue";
 import { useBoardStore } from "@/stores/board";
 
 const store = useBoardStore();
+const draggedCardId = ref<string | null>(null);
+const sourceColumnId = ref<string | null>(null);
 const cardCount = computed(() => store.columns.reduce((total, column) => total + column.cards.length, 0));
+
+const startDragging = (cardId: string, columnId: string) => {
+  draggedCardId.value = cardId;
+  sourceColumnId.value = columnId;
+};
+
+const stopDragging = () => {
+  draggedCardId.value = null;
+  sourceColumnId.value = null;
+};
+
+const dropCard = (targetColumnId: string, targetIndex: number) => {
+  if (draggedCardId.value && sourceColumnId.value) {
+    store.moveCard(draggedCardId.value, sourceColumnId.value, targetColumnId, targetIndex);
+  }
+  stopDragging();
+};
 </script>
 
 <template>
@@ -19,7 +39,15 @@ const cardCount = computed(() => store.columns.reduce((total, column) => total +
     </div>
   </div>
   <div id="board" class="flex items-start gap-5 overflow-x-auto pb-5">
-    <Column v-for="column in store.columns" :key="column.id" :column="column" />
+    <Column
+      v-for="column in store.columns"
+      :key="column.id"
+      :column="column"
+      :dragged-card-id="draggedCardId"
+      @drag-start="startDragging($event, column.id)"
+      @drag-end="stopDragging"
+      @drop="dropCard(column.id, $event)"
+    />
     <button class="btn btn-ghost min-w-72 border border-dashed border-base-content/20 bg-base-100/50" @click="store.addColumn">
       <span class="text-xl">+</span> Ajouter une colonne
     </button>

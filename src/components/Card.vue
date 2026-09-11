@@ -16,21 +16,35 @@ const props = defineProps<CardProps>();
 const emit = defineEmits<{
   update: [event: CardUpdateEvent];
   remove: [id: string];
+  dragStart: [id: string];
+  dragEnd: [];
 }>();
 
 const title = ref(props.card.title);
 const description = ref(props.card.description);
+const isEditing = ref(false);
+
+function openEditor() {
+  title.value = props.card.title;
+  description.value = props.card.description;
+  isEditing.value = true;
+}
+
+function closeEditor() {
+  isEditing.value = false;
+}
 
 function save() {
   emit("update", {
     id: props.card.id,
     patch: { title: title.value.trim() || "Nouvelle tâche", description: description.value.trim() },
   });
+  closeEditor();
 }
 </script>
 
 <template>
-  <article class="card border border-base-300 bg-base-100 shadow-sm transition-shadow hover:shadow-md" :id="props.card.id">
+  <article draggable="true" class="card cursor-grab border border-base-300 bg-base-100 shadow-sm transition-all hover:shadow-md active:cursor-grabbing" :id="props.card.id" @dblclick="openEditor" @dragstart="emit('dragStart', props.card.id)" @dragend="emit('dragEnd')">
     <div class="card-body gap-2 p-4">
       <div class="flex items-start gap-2">
         <input v-model="title" class="input input-ghost input-sm min-w-0 flex-1 px-0 text-sm font-bold focus:bg-base-200" aria-label="Titre de la carte" @blur="save" @keyup.enter="save" />
@@ -48,4 +62,27 @@ function save() {
       </div>
     </div>
   </article>
+  <div v-if="isEditing" class="modal modal-open" role="dialog" aria-modal="true" aria-labelledby="card-editor-title" @click.self="closeEditor">
+    <div class="modal-box max-w-lg border border-base-300 bg-base-100 p-6 shadow-2xl">
+      <div class="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Édition de la tâche</p>
+          <h2 id="card-editor-title" class="mt-1 text-xl font-black">Modifier la carte</h2>
+        </div>
+        <button class="btn btn-circle btn-ghost btn-sm" aria-label="Fermer" @click="closeEditor">×</button>
+      </div>
+      <label class="form-control mb-4 w-full">
+        <span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Titre</span>
+        <input v-model="title" class="input input-bordered w-full font-semibold" autofocus @keyup.esc="closeEditor" @keyup.ctrl.enter="save" />
+      </label>
+      <label class="form-control w-full">
+        <span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Description</span>
+        <textarea v-model="description" class="textarea textarea-bordered min-h-32 w-full leading-relaxed" placeholder="Ajouter une description" @keyup.esc="closeEditor" />
+      </label>
+      <div class="modal-action">
+        <button class="btn btn-ghost" @click="closeEditor">Annuler</button>
+        <button class="btn btn-primary" @click="save">Enregistrer</button>
+      </div>
+    </div>
+  </div>
 </template>

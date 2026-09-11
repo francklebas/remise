@@ -84,6 +84,24 @@ export const useBoardStore = defineStore("board", () => {
     if (column) column.cards = column.cards.filter((card) => card.id !== cardId);
   }
 
+  function moveCard(cardId: string, sourceColumnId: string, targetColumnId: string, targetIndex: number) {
+    const sourceColumn = columns.value.find((column) => column.id === sourceColumnId);
+    const targetColumn = columns.value.find((column) => column.id === targetColumnId);
+    if (!sourceColumn || !targetColumn) return;
+
+    const sourceIndex = sourceColumn.cards.findIndex((card) => card.id === cardId);
+    if (sourceIndex < 0) return;
+
+    const [card] = sourceColumn.cards.splice(sourceIndex, 1);
+    if (!card) return;
+
+    let insertionIndex = Math.max(0, Math.min(targetIndex, targetColumn.cards.length));
+    if (sourceColumnId === targetColumnId && sourceIndex < insertionIndex) insertionIndex -= 1;
+
+    card.columnId = targetColumnId;
+    targetColumn.cards.splice(insertionIndex, 0, card);
+  }
+
   function selectWorkspace(id: string) {
     if (workspaces.some((workspace) => workspace.id === id)) activeWorkspaceId.value = id;
   }
@@ -100,5 +118,6 @@ export const useBoardStore = defineStore("board", () => {
     addCard,
     updateCard,
     removeCard,
+    moveCard,
   };
 });

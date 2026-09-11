@@ -7,9 +7,15 @@ import { useBoardStore } from "@/stores/board";
 
 const store = useBoardStore();
 
-const props = defineProps<{ column: Column }>();
+const props = defineProps<{ column: Column; draggedCardId: string | null }>();
+const emit = defineEmits<{
+  dragStart: [cardId: string];
+  dragEnd: [];
+  drop: [targetIndex: number];
+}>();
 
 const isOpen = ref(false);
+const dragOverIndex = ref<number | null>(null);
 
 const toggle = () => (isOpen.value = !isOpen.value);
 
@@ -23,6 +29,19 @@ const updateCard = (event: CardUpdateEvent) => {
 
 const removeCard = (cardId: string) => {
   store.removeCard(props.column.id, cardId);
+};
+
+const setDragOver = (index: number) => {
+  if (props.draggedCardId) dragOverIndex.value = index;
+};
+
+const dropAt = (index: number) => {
+  if (props.draggedCardId) emit("drop", index);
+  dragOverIndex.value = null;
+};
+
+const clearDragOver = () => {
+  dragOverIndex.value = null;
 };
 </script>
 
@@ -44,8 +63,10 @@ const removeCard = (cardId: string) => {
         </ul>
       </div>
     </header>
-    <div class="flex min-h-28 flex-col gap-3 rounded-2xl bg-base-300/55 p-3">
-      <Card v-for="card in props.column.cards" :key="card.id" :card="card" @update="updateCard" @remove="removeCard" />
+    <div class="flex min-h-28 flex-col gap-3 rounded-2xl bg-base-300/55 p-3" @dragover.prevent="setDragOver(props.column.cards.length)" @drop="dropAt(props.column.cards.length)" @dragleave.self="clearDragOver">
+      <div v-for="(card, index) in props.column.cards" :key="card.id" class="rounded-xl border-2 border-transparent transition-colors" :class="{ 'border-primary/60 bg-primary/10': dragOverIndex === index && draggedCardId !== card.id }" @dragover.prevent.stop="setDragOver(index)" @drop.prevent.stop="dropAt(index)">
+        <Card :card="card" @update="updateCard" @remove="removeCard" @drag-start="emit('dragStart', $event)" @drag-end="emit('dragEnd')" />
+      </div>
       <button class="btn btn-ghost btn-sm justify-start gap-2 text-base-content/55" @click="store.addCard(props.column.id)">
         <Plus :size="16" /> Ajouter une carte
       </button>
