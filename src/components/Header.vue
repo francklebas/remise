@@ -37,7 +37,7 @@ const auth = useAuthStore();
       <div class="flex items-center gap-2 sm:gap-3">
         <label class="input input-sm hidden w-52 items-center gap-2 bg-base-200 sm:flex">
           <Search :size="16" class="text-base-content/40" />
-          <input type="search" placeholder="Rechercher…" aria-label="Rechercher" />
+          <input v-model="store.searchQuery" type="search" placeholder="Rechercher…" aria-label="Rechercher dans les tâches" />
         </label>
         <button class="btn btn-primary btn-sm gap-2 rounded-lg" @click="store.addColumn">
           <Plus :size="17" />

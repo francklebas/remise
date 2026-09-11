@@ -6,7 +6,18 @@ import { useBoardStore } from "@/stores/board";
 const store = useBoardStore();
 const draggedCardId = ref<string | null>(null);
 const sourceColumnId = ref<string | null>(null);
-const cardCount = computed(() => store.columns.reduce((total, column) => total + column.cards.length, 0));
+const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+const visibleColumns = computed(() => {
+  const query = normalize(store.searchQuery.trim());
+  if (!query) return store.columns;
+
+  return store.columns.map((column) => ({
+    ...column,
+    cards: column.cards.filter((card) => normalize(`${card.title} ${card.description}`).includes(query)),
+  }));
+});
+const totalCardCount = computed(() => store.columns.reduce((total, column) => total + column.cards.length, 0));
+const visibleCardCount = computed(() => visibleColumns.value.reduce((total, column) => total + column.cards.length, 0));
 
 const startDragging = (cardId: string, columnId: string) => {
   draggedCardId.value = cardId;
@@ -39,12 +50,12 @@ onMounted(() => {
       <p class="mt-2 text-sm text-base-content/55">Organisez vos idées, une tâche à la fois.</p>
     </div>
     <div class="hidden items-center gap-2 text-sm font-semibold text-base-content/50 sm:flex">
-      <span class="size-2 rounded-full bg-success"></span>{{ cardCount }} tâches
+      <span class="size-2 rounded-full bg-success"></span>{{ visibleCardCount }}<template v-if="store.searchQuery"> / {{ totalCardCount }}</template> tâches
     </div>
   </div>
   <div id="board" class="flex items-start gap-5 overflow-x-auto pb-5">
     <Column
-      v-for="column in store.columns"
+      v-for="column in visibleColumns"
       :key="column.id"
       :column="column"
       :dragged-card-id="draggedCardId"
@@ -52,6 +63,10 @@ onMounted(() => {
       @drag-end="stopDragging"
       @drop="dropCard(column.id, $event)"
     />
+    <div v-if="store.searchQuery && visibleCardCount === 0" class="rounded-2xl border border-dashed border-base-content/20 bg-base-100/60 px-8 py-10 text-center">
+      <p class="font-bold">Aucune tâche trouvée</p>
+      <p class="mt-1 text-sm text-base-content/55">Essayez un autre titre ou mot-clé.</p>
+    </div>
     <button class="btn btn-ghost min-w-72 border border-dashed border-base-content/20 bg-base-100/50" @click="store.addColumn">
       <span class="text-xl">+</span> Ajouter une colonne
     </button>

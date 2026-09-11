@@ -13,6 +13,7 @@ export const useBoardStore = defineStore("board", () => {
     { id: "team", name: "Équipe produit", color: "bg-info" },
   ];
   const activeWorkspaceId = ref("personal");
+  const searchQuery = ref("");
   const columns = ref<Column[]>([
     {
       id: "todo",
@@ -157,6 +158,7 @@ export const useBoardStore = defineStore("board", () => {
     workspaces,
     activeWorkspace,
     activeWorkspaceId,
+    searchQuery,
     selectWorkspace,
     addColumn,
     updateColumn,
