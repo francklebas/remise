@@ -33,7 +33,7 @@ Deno.serve(async (request) => {
     if (!resendApiKey) return new Response(JSON.stringify({ error: "RESEND_API_KEY is not configured" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const { task, action } = await request.json() as { task: Task; action: "created" | "updated" };
-    const appUrl = `${Deno.env.get("APP_URL") ?? "http://localhost:5173"}/?card=${encodeURIComponent(task.id)}`;
+    const appUrl = `${Deno.env.get("APP_URL") ?? "https://boardly.francklebas.com"}/?card=${encodeURIComponent(task.id)}`;
     const subject = action === "created" ? `Nouvelle tâche : ${task.title}` : `Tâche mise à jour : ${task.title}`;
     const details = [
       task.dueDate ? `Date limite : ${task.dueDate}${task.dueTime ? ` à ${task.dueTime}` : ""}` : null,

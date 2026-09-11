@@ -37,7 +37,7 @@ cp .env.production.example .env.production.local
 bun run build:production
 ```
 
-The production application URL is `https://bloardly.francklebas.com`. Authentication links use the current application origin automatically: `http://localhost:5173` locally and the production domain when deployed. `VITE_APP_URL` remains available for other production configuration, but login redirects do not depend on it.
+The production application URL is `https://boardly.francklebas.com`. Authentication links use the current application origin automatically: `http://localhost:5173` locally and the production domain when deployed. `VITE_APP_URL` remains available for other production configuration, but login redirects do not depend on it.
 
 All `*.local` files are ignored by Git. Never expose private keys through a variable prefixed with `VITE_`.
 
@@ -46,7 +46,7 @@ All `*.local` files are ignored by Git. Never expose private keys through a vari
 Notifications are sent by the `send-task-notification` Supabase Edge Function. Resend credentials must be configured as Supabase secrets, not browser environment variables:
 
 ```sh
-supabase secrets set RESEND_API_KEY="$RESEND_API_KEY" RESEND_FROM_EMAIL="Boardly <notifications@your-verified-domain.example>" APP_URL="https://bloardly.francklebas.com"
+supabase secrets set RESEND_API_KEY="$RESEND_API_KEY" RESEND_FROM_EMAIL="Boardly <notifications@your-verified-domain.example>" APP_URL="https://boardly.francklebas.com"
 supabase functions deploy send-task-notification
 ```
 
