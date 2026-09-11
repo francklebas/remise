@@ -25,7 +25,7 @@ async function submit() {
       <p class="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-primary">Bienvenue</p>
       <h1 class="text-3xl font-black leading-tight tracking-tight">Accédez à vos boards</h1>
       <p class="mt-3 max-w-sm text-sm leading-relaxed text-base-content/60">Connectez votre compte client pour retrouver vos espaces de travail.</p>
-      <form class="mt-6 space-y-5" @submit.prevent="submit">
+      <form class="mt-7 flex flex-col gap-5" @submit.prevent="submit">
         <label class="form-control w-full">
           <span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Adresse e-mail</span>
           <input v-model="email" required type="email" autocomplete="email" placeholder="vous@exemple.fr" class="input input-bordered w-full" />
