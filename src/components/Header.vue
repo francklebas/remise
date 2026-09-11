@@ -1,8 +1,10 @@
 <script lang="ts" setup>
 import { useBoardStore } from "@/stores/board";
-import { Check, ChevronDown, LayoutDashboard, Plus, Search, Sparkles } from "@lucide/vue";
+import { Check, ChevronDown, LayoutDashboard, LogOut, Plus, Search, Sparkles } from "@lucide/vue";
+import { useAuthStore } from "@/stores/auth";
 
 const store = useBoardStore();
+const auth = useAuthStore();
 </script>
 
 <template>
@@ -43,6 +45,9 @@ const store = useBoardStore();
         </button>
         <button class="btn btn-circle btn-ghost btn-sm" aria-label="Assistant">
           <Sparkles :size="18" />
+        </button>
+        <button class="btn btn-circle btn-ghost btn-sm" aria-label="Se déconnecter" title="Se déconnecter" @click="auth.signOut">
+          <LogOut :size="18" />
         </button>
       </div>
     </div>

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { ref } from "vue";
-import { MoreHorizontal, Trash2 } from "@lucide/vue";
-import type { Card } from "@/types/board";
+import { CalendarDays, MoreHorizontal, Trash2 } from "@lucide/vue";
+import type { Card, CardComplexity } from "@/types/board";
 
 interface CardProps {
   card: Card;
@@ -9,7 +9,7 @@ interface CardProps {
 
 export interface CardUpdateEvent {
   id: string;
-  patch: Partial<Pick<Card, "title" | "description">>;
+  patch: Partial<Pick<Card, "title" | "description" | "dueDate" | "dueTime" | "estimatedDuration" | "complexity">>;
 }
 
 const props = defineProps<CardProps>();
@@ -22,11 +22,19 @@ const emit = defineEmits<{
 
 const title = ref(props.card.title);
 const description = ref(props.card.description);
+const dueDate = ref<string | null>(props.card.dueDate);
+const dueTime = ref<string | null>(props.card.dueTime);
+const estimatedDuration = ref<number | null>(props.card.estimatedDuration);
+const complexity = ref<CardComplexity>(props.card.complexity);
 const isEditing = ref(false);
 
 function openEditor() {
   title.value = props.card.title;
   description.value = props.card.description;
+  dueDate.value = props.card.dueDate;
+  dueTime.value = props.card.dueTime;
+  estimatedDuration.value = props.card.estimatedDuration;
+  complexity.value = props.card.complexity;
   isEditing.value = true;
 }
 
@@ -37,17 +45,24 @@ function closeEditor() {
 function save() {
   emit("update", {
     id: props.card.id,
-    patch: { title: title.value.trim() || "Nouvelle tâche", description: description.value.trim() },
+    patch: {
+      title: title.value.trim() || "Nouvelle tâche",
+      description: description.value.trim(),
+      dueDate: dueDate.value || null,
+      dueTime: dueDate.value ? dueTime.value || null : null,
+      estimatedDuration: estimatedDuration.value && estimatedDuration.value > 0 ? estimatedDuration.value : null,
+      complexity: complexity.value,
+    },
   });
   closeEditor();
 }
 </script>
 
 <template>
-  <article draggable="true" class="card cursor-grab border border-base-300 bg-base-100 shadow-sm transition-all hover:shadow-md active:cursor-grabbing" :id="props.card.id" @dblclick="openEditor" @dragstart="emit('dragStart', props.card.id)" @dragend="emit('dragEnd')">
+  <article draggable="true" class="card cursor-grab select-none border border-base-300 bg-base-100 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-base-100 hover:shadow-lg active:cursor-grabbing" :id="props.card.id" @dblclick="openEditor" @dragstart="emit('dragStart', props.card.id)" @dragend="emit('dragEnd')">
     <div class="card-body gap-2 p-4">
       <div class="flex items-start gap-2">
-        <input v-model="title" class="input input-ghost input-sm min-w-0 flex-1 px-0 text-sm font-bold focus:bg-base-200" aria-label="Titre de la carte" @blur="save" @keyup.enter="save" />
+        <h3 class="min-w-0 flex-1 break-words text-sm font-bold leading-snug">{{ props.card.title || "Nouvelle tâche" }}</h3>
         <div class="dropdown dropdown-end">
           <button tabindex="0" class="btn btn-circle btn-ghost btn-xs text-base-content/45" aria-label="Options de la carte"><MoreHorizontal :size="16" /></button>
           <ul tabindex="0" class="menu dropdown-content z-10 mt-1 w-40 rounded-box bg-base-100 p-2 text-sm shadow-xl">
@@ -55,10 +70,11 @@ function save() {
           </ul>
         </div>
       </div>
-      <textarea v-model="description" rows="2" class="textarea textarea-ghost min-h-0 resize-none px-0 text-xs leading-relaxed text-base-content/55 focus:bg-base-200" placeholder="Ajouter une description" aria-label="Description de la carte" @blur="save" />
+      <p class="min-h-8 whitespace-pre-line break-words text-xs leading-relaxed text-base-content/55">{{ props.card.description || "Ajouter une description" }}</p>
       <div class="mt-1 flex items-center justify-between text-[11px] font-semibold text-base-content/35">
-        <span class="rounded-md bg-primary/15 px-2 py-1 text-primary-content/70">TÂCHE</span>
-        <span>À l'instant</span>
+        <span class="rounded-md px-2 py-1" :class="{ 'bg-success/20 text-success-content': props.card.complexity === 'low', 'bg-warning/25 text-warning-content': props.card.complexity === 'medium', 'bg-error/20 text-error-content': props.card.complexity === 'high' }">{{ props.card.complexity === "low" ? "FAIBLE" : props.card.complexity === "high" ? "ÉLEVÉE" : "MOYENNE" }}</span>
+        <span v-if="props.card.dueDate" class="flex items-center gap-1"><CalendarDays :size="13" />{{ props.card.dueDate }}<template v-if="props.card.dueTime"> · {{ props.card.dueTime }}</template></span>
+        <span v-else>À l'instant</span>
       </div>
     </div>
   </article>
@@ -78,6 +94,35 @@ function save() {
       <label class="form-control w-full">
         <span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Description</span>
         <textarea v-model="description" class="textarea textarea-bordered min-h-32 w-full leading-relaxed" placeholder="Ajouter une description" @keyup.esc="closeEditor" />
+      </label>
+      <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        <label class="form-control w-full">
+          <span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Date de création</span>
+          <input type="date" class="input input-bordered w-full bg-base-200 text-base-content/60" :value="props.card.createdAt" readonly aria-readonly="true" />
+        </label>
+        <label class="form-control w-full">
+          <span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Date limite</span>
+          <input v-model="dueDate" type="date" class="input input-bordered w-full" @keyup.esc="closeEditor" />
+        </label>
+        <label class="form-control w-full">
+          <span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Heure limite</span>
+          <input v-model="dueTime" type="time" class="input input-bordered w-full" :disabled="!dueDate" @keyup.esc="closeEditor" />
+        </label>
+      </div>
+      <label class="form-control mt-4 w-full sm:max-w-[calc(50%-0.5rem)]">
+        <span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Durée estimée</span>
+        <div class="join w-full">
+          <input v-model.number="estimatedDuration" type="number" min="0" step="15" class="input input-bordered join-item w-full" placeholder="0" @keyup.esc="closeEditor" />
+          <span class="btn btn-neutral join-item pointer-events-none">min</span>
+        </div>
+      </label>
+      <label class="form-control mt-4 w-full sm:max-w-[calc(50%-0.5rem)]">
+        <span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Complexité</span>
+        <select v-model="complexity" class="select select-bordered w-full">
+          <option value="low">Faible</option>
+          <option value="medium">Moyenne</option>
+          <option value="high">Élevée</option>
+        </select>
       </label>
       <div class="modal-action">
         <button class="btn btn-ghost" @click="closeEditor">Annuler</button>
