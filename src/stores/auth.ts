@@ -31,13 +31,13 @@ export const useAuthStore = defineStore("auth", () => {
     unsubscribe = () => listener.subscription.unsubscribe();
   }
 
-  async function signInWithMagicLink(email: string) {
+  async function signInWithMagicLink(email: string, captchaToken?: string) {
     if (!supabase) return;
     error.value = null;
     messageSent.value = false;
     const { error: signInError } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: window.location.origin, captchaToken },
     });
     if (signInError) error.value = signInError.message;
     else messageSent.value = true;

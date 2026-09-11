@@ -7,6 +7,10 @@ Learn more about the recommended Project Setup and IDE Support in the [Vue Docs 
 
 Les notifications sont envoyées par la Supabase Edge Function `send-task-notification`. La clé Resend ne doit pas être préfixée par `VITE_` et ne doit jamais être exposée au navigateur.
 
+## Protection Turnstile
+
+Le formulaire de connexion utilise le widget Turnstile et transmet son token à Supabase Auth. Ajoutez `VITE_TURNSTILE_SITE_KEY` dans l’environnement de build, puis activez Turnstile dans Supabase dans **Authentication → Bot and Abuse Protection** avec la secret key Turnstile. La secret key ne doit jamais être ajoutée à une variable `VITE_`.
+
 Configurez les secrets côté Supabase puis déployez la fonction :
 
 ```sh
