@@ -37,7 +37,7 @@ cp .env.production.example .env.production.local
 bun run build:production
 ```
 
-The production application URL is `https://bloardly.francklebas.com`. Cloudflare Pages deployments must use the production variables, especially `VITE_APP_URL`, so authentication and task links never point to localhost.
+The production application URL is `https://bloardly.francklebas.com`. Authentication links use the current application origin automatically: `http://localhost:5173` locally and the production domain when deployed. `VITE_APP_URL` remains available for other production configuration, but login redirects do not depend on it.
 
 All `*.local` files are ignored by Git. Never expose private keys through a variable prefixed with `VITE_`.
 

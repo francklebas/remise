@@ -38,7 +38,7 @@ export const useAuthStore = defineStore("auth", () => {
     const { error: signInError } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: import.meta.env.VITE_APP_URL || window.location.origin,
+        emailRedirectTo: window.location.origin,
         captchaToken,
       },
     });
