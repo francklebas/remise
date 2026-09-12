@@ -1,0 +1,5 @@
+project_id = "remise"
+
+[auth]
+site_url = "https://boardly.francklebas.com"
+additional_redirect_urls = ["https://boardly.francklebas.com", "http://localhost:5173"]
