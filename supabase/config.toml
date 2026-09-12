@@ -6,3 +6,10 @@ additional_redirect_urls = ["https://boardly.francklebas.com", "http://localhost
 
 [auth.email]
 enable_confirmations = true
+
+# Supabase CLI runs Mailpit as part of the local Docker stack. These are the
+# ports exposed on the host; Auth reaches Mailpit through Docker's network.
+[local_smtp]
+enabled = true
+port = 8025
+smtp_port = 1025

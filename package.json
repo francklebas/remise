@@ -8,7 +8,10 @@
     "build": "vue-tsc -b && vite build",
     "build:development": "vue-tsc -b && vite build --mode development",
     "build:production": "vue-tsc -b && vite build --mode production",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "supabase:start": "npx supabase start",
+    "supabase:stop": "npx supabase stop",
+    "supabase:status": "npx supabase status"
   },
   "dependencies": {
     "@lucide/vue": "^1.44.0",

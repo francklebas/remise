@@ -22,11 +22,30 @@ The application uses Vue 3, TypeScript, Vite, Pinia, Tailwind CSS, daisyUI, and 
 
 ```sh
 bun install
+bun run supabase:start
 cp .env.development.example .env.development.local
 bun run dev
 ```
 
-Fill in the Supabase and Turnstile values in `.env.development.local`. The local application is served at `http://localhost:5173`.
+Copy the local anon key printed by `bun run supabase:status` into `.env.development.local`. The local application is served at `http://localhost:5173`.
+
+The local Supabase Docker stack includes Mailpit for capturing account-confirmation emails. Its web interface is available at `http://localhost:8025` and its SMTP port is `localhost:1025`.
+
+Mailpit does not require mailboxes to be created beforehand. Use as many unique addresses under the reserved test domain `@example.test` as needed, for example:
+
+```text
+alice@example.test
+bob@example.test
+client-001@example.test
+```
+
+Every message sent to these addresses appears in the same Mailpit interface, and no message leaves the machine. Supabase requires a unique address per account. To reuse an address, delete its user first from **Authentication → Users** in the local Supabase Studio at `http://localhost:54323`.
+
+Stop the local stack when it is no longer needed:
+
+```sh
+bun run supabase:stop
+```
 
 ## Production builds
 
