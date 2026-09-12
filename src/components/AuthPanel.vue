@@ -4,7 +4,9 @@ import { ArrowRight, Mail } from "@lucide/vue";
 import { useAuthStore } from "@/stores/auth";
 
 const auth = useAuthStore();
+const mode = ref<"signIn" | "signUp">("signIn");
 const email = ref("");
+const password = ref("");
 const isSending = ref(false);
 const captchaToken = ref("");
 const captchaError = ref<string | null>(null);
@@ -26,7 +28,7 @@ function mountTurnstile() {
   turnstileWidgetId = window.turnstile.render(turnstileContainer.value, {
     sitekey: turnstileSiteKey,
     theme: "light",
-    action: "magic_link_login",
+    action: "password_auth",
     callback: (token) => {
       captchaToken.value = token;
       captchaError.value = null;
@@ -73,17 +75,25 @@ onBeforeUnmount(() => {
 });
 
 async function submit() {
-  if (!email.value.trim()) return;
+  if (!email.value.trim() || !password.value) return;
   if (turnstileSiteKey && !captchaToken.value) {
     captchaError.value =
       "Validez la vérification anti-robot avant de continuer.";
     return;
   }
   isSending.value = true;
-  await auth.signInWithMagicLink(
-    email.value.trim(),
-    captchaToken.value || undefined,
-  );
+  if (mode.value === "signIn")
+    await auth.signInWithPassword(
+      email.value.trim(),
+      password.value,
+      captchaToken.value || undefined,
+    );
+  else
+    await auth.signUp(
+      email.value.trim(),
+      password.value,
+      captchaToken.value || undefined,
+    );
   isSending.value = false;
   if (turnstileWidgetId !== undefined) {
     window.turnstile?.reset(turnstileWidgetId);
@@ -119,8 +129,28 @@ async function submit() {
         Accédez à vos boards
       </h1>
       <p class="mt-3 max-w-sm text-sm leading-relaxed text-base-content/60">
-        Connectez votre compte client pour retrouver vos espaces de travail.
+        Connectez-vous avec votre adresse e-mail et votre mot de passe.
       </p>
+      <div role="tablist" class="tabs tabs-box mt-6 grid grid-cols-2">
+        <button
+          type="button"
+          role="tab"
+          class="tab"
+          :class="{ 'tab-active': mode === 'signIn' }"
+          @click="mode = 'signIn'"
+        >
+          Connexion
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="tab"
+          :class="{ 'tab-active': mode === 'signUp' }"
+          @click="mode = 'signUp'"
+        >
+          Créer un compte
+        </button>
+      </div>
       <form class="mt-7 flex flex-col gap-5" @submit.prevent="submit">
         <label class="form-control w-full">
           <span
@@ -133,6 +163,23 @@ async function submit() {
             type="email"
             autocomplete="email"
             placeholder="vous@exemple.fr"
+            class="input input-bordered w-full"
+          />
+        </label>
+        <label class="form-control w-full">
+          <span
+            class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55"
+            >Mot de passe</span
+          >
+          <input
+            v-model="password"
+            required
+            type="password"
+            :autocomplete="
+              mode === 'signIn' ? 'current-password' : 'new-password'
+            "
+            :minlength="mode === 'signUp' ? 8 : undefined"
+            placeholder="8 caractères minimum"
             class="input input-bordered w-full"
           />
         </label>
@@ -152,16 +199,18 @@ async function submit() {
             v-if="isSending"
             class="loading loading-spinner loading-sm"
           ></span>
-          <template v-else
-            >Recevoir mon lien de connexion <ArrowRight :size="17"
-          /></template>
+          <template v-else>
+            {{ mode === "signIn" ? "Se connecter" : "Créer mon compte" }}
+            <ArrowRight :size="17" />
+          </template>
         </button>
       </form>
       <div
-        v-if="auth.messageSent"
+        v-if="auth.confirmationSent"
         class="alert alert-success mt-6 text-sm leading-relaxed"
       >
-        Un lien de connexion vient d’être envoyé à cette adresse.
+        Votre compte a été créé. Consultez votre messagerie pour confirmer votre
+        adresse, puis connectez-vous avec votre mot de passe.
       </div>
       <div
         v-if="auth.error"

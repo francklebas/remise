@@ -7,7 +7,7 @@ export const useAuthStore = defineStore("auth", () => {
   const session = ref<Session | null>(null);
   const isLoading = ref(true);
   const error = ref<string | null>(null);
-  const messageSent = ref(false);
+  const confirmationSent = ref(false);
   const notificationsEnabled = ref(false);
   let unsubscribe: (() => void) | undefined;
 
@@ -19,31 +19,60 @@ export const useAuthStore = defineStore("auth", () => {
 
     const { data, error: sessionError } = await supabase.auth.getSession();
     session.value = data.session;
-    notificationsEnabled.value = Boolean(data.session?.user.user_metadata.notifications_enabled);
+    notificationsEnabled.value = Boolean(
+      data.session?.user.user_metadata.notifications_enabled,
+    );
     error.value = sessionError?.message ?? null;
     isLoading.value = false;
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      session.value = nextSession;
-      notificationsEnabled.value = Boolean(nextSession?.user.user_metadata.notifications_enabled);
-      isLoading.value = false;
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, nextSession) => {
+        session.value = nextSession;
+        notificationsEnabled.value = Boolean(
+          nextSession?.user.user_metadata.notifications_enabled,
+        );
+        isLoading.value = false;
+      },
+    );
     unsubscribe = () => listener.subscription.unsubscribe();
   }
 
-  async function signInWithMagicLink(email: string, captchaToken?: string) {
+  async function signInWithPassword(
+    email: string,
+    password: string,
+    captchaToken?: string,
+  ) {
     if (!supabase) return;
     error.value = null;
-    messageSent.value = false;
-    const { error: signInError } = await supabase.auth.signInWithOtp({
+    confirmationSent.value = false;
+    const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
+      password,
+      options: {
+        captchaToken,
+      },
+    });
+    if (signInError) error.value = signInError.message;
+  }
+
+  async function signUp(
+    email: string,
+    password: string,
+    captchaToken?: string,
+  ) {
+    if (!supabase) return;
+    error.value = null;
+    confirmationSent.value = false;
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
       options: {
         emailRedirectTo: window.location.origin,
         captchaToken,
       },
     });
-    if (signInError) error.value = signInError.message;
-    else messageSent.value = true;
+    if (signUpError) error.value = signUpError.message;
+    else confirmationSent.value = !data.session;
   }
 
   async function signOut() {
@@ -71,5 +100,17 @@ export const useAuthStore = defineStore("auth", () => {
     unsubscribe?.();
   }
 
-  return { session, isLoading, error, messageSent, notificationsEnabled, initialize, signInWithMagicLink, setNotificationsEnabled, signOut, dispose };
+  return {
+    session,
+    isLoading,
+    error,
+    confirmationSent,
+    notificationsEnabled,
+    initialize,
+    signInWithPassword,
+    signUp,
+    setNotificationsEnabled,
+    signOut,
+    dispose,
+  };
 });

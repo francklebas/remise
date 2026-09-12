@@ -4,7 +4,7 @@ Boardly is a lightweight Kanban workspace for organizing tasks visually. A works
 
 ## Using the app
 
-1. Sign in with your email using the magic link.
+1. Create an account with your email and password, confirm your email address, then sign in.
 2. Open a workspace and select a board.
 3. Create or move cards across columns with drag and drop.
 4. Double-click a card to edit its details in the modal.
@@ -37,7 +37,7 @@ cp .env.production.example .env.production.local
 bun run build:production
 ```
 
-The production application URL is `https://boardly.francklebas.com`. Authentication links use the current application origin automatically: `http://localhost:5173` locally and the production domain when deployed. `VITE_APP_URL` remains available for other production configuration, but login redirects do not depend on it.
+The production application URL is `https://boardly.francklebas.com`. Account-confirmation links use the current application origin automatically: `http://localhost:5173` locally and the production domain when deployed. `VITE_APP_URL` remains available for other production configuration, but confirmation redirects do not depend on it.
 
 All `*.local` files are ignored by Git. Never expose private keys through a variable prefixed with `VITE_`.
 
