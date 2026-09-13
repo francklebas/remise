@@ -83,6 +83,13 @@ body { margin: 0; min-width: 320px; }
   outline: 1px solid color-mix(in oklab, currentColor 15%, transparent);
 }
 .content-editor__rich .ProseMirror img.ProseMirror-selectednode { outline: 3px solid oklch(85% 0.199 91.936); }
+.content-editor__rich .ProseMirror table { width: 100%; margin: 0.75rem 0; border-collapse: collapse; table-layout: fixed; overflow: hidden; border: 1px solid oklch(85% 0 0); border-radius: 0.5rem; }
+.content-editor__rich .ProseMirror th,
+.content-editor__rich .ProseMirror td { min-width: 5rem; border: 1px solid oklch(85% 0 0); padding: 0.5rem 0.65rem; text-align: left; vertical-align: top; }
+.content-editor__rich .ProseMirror th { background: oklch(97% 0 0); font-weight: 800; }
+.content-editor__rich .ProseMirror .selectedCell::after { position: absolute; z-index: 2; inset: 0; background: oklch(85% 0.199 91.936 / 0.18); content: ""; pointer-events: none; }
+.content-editor__rich .ProseMirror td,
+.content-editor__rich .ProseMirror th { position: relative; }
 .content-editor__rich .ProseMirror pre[data-language]:not([data-language=""])::before {
   content: attr(data-language);
   position: absolute;

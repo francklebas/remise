@@ -3,10 +3,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { EditorView } from "prosemirror-view";
 import { setBlockType, toggleMark, wrapIn } from "prosemirror-commands";
 import { wrapInList } from "prosemirror-schema-list";
-import { createCodeBlockCommand, createEditorState } from "@/editor/state";
+import { createCodeBlockCommand, createEditorState, createTable } from "@/editor/state";
 import { documentFromDescription, documentToJSON, type CardDescription } from "@/editor/document";
 import { documentToMarkdown, markdownToDocument, MarkdownConversionError } from "@/editor/markdown";
 import { editorSchema } from "@/editor/schema";
+import { sanitizePastedHTML } from "@/editor/clipboard";
 
 const props = defineProps<{ modelValue: CardDescription }>();
 const emit = defineEmits<{ "update:modelValue": [value: ReturnType<typeof documentToJSON>] }>();
@@ -33,9 +34,13 @@ function dispatchCommand(command: (state: NonNullable<typeof view>["state"], dis
 function setMode(mode: "rich" | "markdown") {
   if (mode === editingMode.value || !view) return;
   if (mode === "markdown") {
-    markdown.value = documentToMarkdown(view.state.doc);
-    conversionError.value = "";
-    editingMode.value = "markdown";
+    try {
+      markdown.value = documentToMarkdown(view.state.doc);
+      conversionError.value = "";
+      editingMode.value = "markdown";
+    } catch (error) {
+      conversionError.value = error instanceof MarkdownConversionError ? error.message : "Impossible de convertir ce document en Markdown.";
+    }
     return;
   }
 
@@ -65,6 +70,12 @@ function addLink() {
   dispatchCommand(toggleMark(editorSchema.marks.link, { href: href.trim(), title: null }));
 }
 
+function insertTable() {
+  if (!view) return;
+  view.dispatch(view.state.tr.replaceSelectionWith(createTable()).scrollIntoView());
+  view.focus();
+}
+
 watch(
   () => props.modelValue,
   (value) => {
@@ -84,6 +95,7 @@ onMounted(() => {
       view.updateState(view.state.apply(transaction));
       if (transaction.docChanged) publish();
     },
+    transformPastedHTML: sanitizePastedHTML,
   });
 });
 
@@ -107,6 +119,7 @@ onBeforeUnmount(() => view?.destroy());
         <button class="btn btn-ghost btn-xs" type="button" title="Liste à puces" @click="dispatchCommand(wrapInList(editorSchema.nodes.bullet_list))">• Liste</button>
         <button class="btn btn-ghost btn-xs" type="button" title="Liste numérotée" @click="dispatchCommand(wrapInList(editorSchema.nodes.ordered_list))">1. Liste</button>
         <button class="btn btn-ghost btn-xs" type="button" title="Citation" @click="dispatchCommand(wrapIn(editorSchema.nodes.blockquote))">Citation</button>
+        <button class="btn btn-ghost btn-xs" type="button" title="Insérer un tableau 3 × 3" @click="insertTable">Tableau</button>
         <select v-model="selectedLanguage" class="select select-ghost select-xs ml-auto max-w-36 font-mono" aria-label="Langage du bloc de code" @change="setCodeBlockLanguage">
           <option value="">Bloc de code</option>
           <option v-for="language in ['js', 'javascript', 'ts', 'typescript', 'json', 'html', 'css', 'scss', 'vue', 'sh', 'bash', 'shell', 'zsh', 'python', 'php', 'sql', 'yaml', 'markdown']" :key="language" :value="language">{{ language }}</option>

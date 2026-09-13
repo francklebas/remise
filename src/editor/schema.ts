@@ -1,8 +1,10 @@
 import { Schema } from "prosemirror-model";
 import { schema as basicSchema } from "prosemirror-schema-basic";
 import { addListNodes } from "prosemirror-schema-list";
+import { tableNodes } from "prosemirror-tables";
 
 const nodes = addListNodes(basicSchema.spec.nodes, "paragraph block*", "block")
+  .append(tableNodes({ tableGroup: "block", cellContent: "block+", cellAttributes: {} }))
   .update("image", {
     inline: true,
     group: "inline",
@@ -25,20 +27,25 @@ const nodes = addListNodes(basicSchema.spec.nodes, "paragraph block*", "block")
     toDOM: (node) => ["img", { src: node.attrs.src, alt: node.attrs.alt, title: node.attrs.title }],
   })
   .update("code_block", {
-  attrs: { language: { default: "" } },
-  group: "block",
-  content: "text*",
-  marks: "",
-  code: true,
-  defining: true,
-  parseDOM: [
-    {
-      tag: "pre",
-      preserveWhitespace: "full",
-      getAttrs: (element) => ({ language: (element as HTMLElement).dataset.language ?? "" }),
-    },
-  ],
-  toDOM: (node) => ["pre", { "data-language": node.attrs.language || null }, ["code", 0]],
+    attrs: { language: { default: "" } },
+    group: "block",
+    content: "text*",
+    marks: "",
+    code: true,
+    defining: true,
+    parseDOM: [
+      {
+        tag: "pre",
+        preserveWhitespace: "full",
+        getAttrs: (element) => {
+          const pre = element as HTMLElement;
+          const code = pre.querySelector("code");
+          const findLanguage = (className: string) => /(?:^|\s)(?:language|lang)-([^\s]+)/i.exec(className)?.[1] ?? "";
+          return { language: pre.dataset.language || findLanguage(pre.className) || findLanguage(code?.className ?? "") };
+        },
+      },
+    ],
+    toDOM: (node) => ["pre", { "data-language": node.attrs.language || null }, ["code", 0]],
   });
 
 const marks = basicSchema.spec.marks.addToEnd("strike", {

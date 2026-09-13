@@ -1,10 +1,20 @@
+// @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
+import { DOMParser as ProseMirrorDOMParser } from "prosemirror-model";
 import { documentToJSON, emptyDocument, normalizeDescription } from "@/editor/document";
 import { documentToMarkdown, markdownToDocument, MarkdownConversionError } from "@/editor/markdown";
 import { editorSchema } from "@/editor/schema";
+import { sanitizePastedHTML } from "@/editor/clipboard";
+import { createTable } from "@/editor/state";
 
 function roundTripMarkdown(markdown: string) {
   return markdownToDocument(documentToMarkdown(markdownToDocument(markdown)));
+}
+
+function parsePastedHTML(html: string) {
+  const container = document.createElement("div");
+  container.innerHTML = sanitizePastedHTML(html);
+  return ProseMirrorDOMParser.fromSchema(editorSchema).parse(container);
 }
 
 describe("ProseMirror editorial document", () => {
@@ -48,6 +58,50 @@ describe("ProseMirror editorial document", () => {
     expect(hasNestedList).toBe(true);
   });
 
+  it("parses, serializes and restores a Markdown table with marks in cells", () => {
+    const markdown = "| Nom | Détail |\n| --- | --- |\n| **Alpha** | [Lien](https://example.test) et `code` |\n| Bravo | ~~archivé~~ |";
+    const document = markdownToDocument(markdown);
+    const table = document.firstChild!;
+    expect(table.type.name).toBe("table");
+    expect(table.firstChild!.firstChild!.type.name).toBe("table_header");
+    expect(table.child(1).firstChild!.type.name).toBe("table_cell");
+    expect(table.child(1).firstChild!.firstChild!.textContent).toBe("Alpha");
+
+    const serialized = documentToMarkdown(document);
+    expect(serialized).toBe(markdown);
+    const restored = markdownToDocument(serialized);
+    expect(documentToJSON(restored)).toEqual(documentToJSON(document));
+  });
+
+  it("preserves a pasted HTML table structure after clipboard cleanup", () => {
+    const parsed = parsePastedHTML('<table class="docs-table" style="width:100%"><thead><tr><th data-column="name">Nom</th><th>Détail</th></tr></thead><tbody><tr><td><strong>Alpha</strong></td><td><a href="/guide">Lien</a></td></tr></tbody></table>');
+    const table = parsed.firstChild!;
+    expect(table.type.name).toBe("table");
+    expect(table.firstChild!.firstChild!.type.name).toBe("table_header");
+    expect(table.child(1).firstChild!.type.name).toBe("table_cell");
+    expect(table.child(1).firstChild!.firstChild!.firstChild!.marks.map((mark) => mark.type.name)).toEqual(["strong"]);
+    expect(table.child(1).child(1).firstChild!.firstChild!.marks[0]!.attrs.href).toBe("/guide");
+  });
+
+  it("creates an editable table with an explicit header row", () => {
+    const table = createTable();
+    expect(table.type.name).toBe("table");
+    expect(table.childCount).toBe(3);
+    expect(table.firstChild!.childCount).toBe(3);
+    expect(table.firstChild!.firstChild!.type.name).toBe("table_header");
+    expect(table.child(1).firstChild!.type.name).toBe("table_cell");
+    expect(table.firstChild!.firstChild!.firstChild!.type.name).toBe("paragraph");
+  });
+
+  it("refuses a headerless table Markdown conversion instead of changing cell semantics", () => {
+    const paragraph = editorSchema.nodes.paragraph.createAndFill()!;
+    const cell = editorSchema.nodes.table_cell.createAndFill(null, paragraph)!;
+    const row = editorSchema.nodes.table_row.createAndFill(null, [cell, cell])!;
+    const table = editorSchema.nodes.table.createAndFill(null, [row])!;
+    const document = editorSchema.nodes.doc.create(null, [table]);
+    expect(() => documentToMarkdown(document)).toThrow(MarkdownConversionError);
+  });
+
   it.each(["sh", "bash", "shell", "zsh", "js", "javascript", "ts", "typescript", "json", "html", "css", "scss", "vue", "python", "php", "sql", "yaml", "markdown", "whatever"])(
     "round-trips canonical JSON and Markdown with the exact code-block language %s",
     (language) => {
@@ -79,6 +133,65 @@ describe("ProseMirror editorial document", () => {
     expect(restored.firstChild!.attrs.language).toBe("typescript");
     expect(restored.firstChild!.textContent).toBe("const template = `value with ``` backticks`;\n  indented();");
     expect(documentToJSON(restored)).toEqual(documentToJSON(original));
+  });
+
+  it("cleans decorative rich HTML while keeping its expected ProseMirror structure", () => {
+    const html = [
+      '<h2 class="docs-heading" style="color: blue" onclick="alert(1)">Titre</h2>',
+      '<p class="MsoNormal" data-source="word" style="mso-margin-top-alt:auto">Un <span class="c4" style="font-weight: 700">texte</span> <a href="https://example.test/page" title="Page" data-track="x">lié</a> <img src="/images/logo.png" alt="Logo" title="Marque" data-id="42"></p>',
+      "<script>window.evil = true</script>",
+    ].join("");
+
+    const sanitized = sanitizePastedHTML(html);
+    expect(sanitized).not.toMatch(/script|onclick|class=|data-source|mso-|data-track/i);
+    const parsed = parsePastedHTML(html);
+    expect(documentToJSON(parsed)).toEqual({
+      type: "doc",
+      content: [
+        { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Titre" }] },
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Un " },
+            { type: "text", marks: [{ type: "strong" }], text: "texte" },
+            { type: "text", text: " " },
+            { type: "text", marks: [{ type: "link", attrs: { href: "https://example.test/page", title: "Page" } }], text: "lié" },
+            { type: "text", text: " " },
+            { type: "image", attrs: { src: "/images/logo.png", alt: "Logo", title: "Marque" } },
+          ],
+        },
+      ],
+    });
+  });
+
+  it.each(["sh", "bash", "ts", "typescript", "js", "javascript"])("keeps code language %s exactly when pasting HTML", (language) => {
+    const html = `<pre class="ignored"><code class="language-${language}">echo "hello"\n  indented</code></pre>`;
+    const sanitized = sanitizePastedHTML(html);
+    expect(sanitized).toContain(`data-language="${language}"`);
+    const parsed = parsePastedHTML(html);
+    expect(parsed.firstChild!.attrs.language).toBe(language);
+    expect(parsed.firstChild!.textContent).toBe('echo "hello"\n  indented');
+  });
+
+  it("preserves schema attributes and removes unsafe clipboard URLs", () => {
+    const sanitized = sanitizePastedHTML('<p><a href="javascript:alert(1)">dangereux</a><a href="/guide" title="Guide">sûr</a><img src="data:image/png;base64,abc" alt="Temporaire"><img src="https://example.test/image.png" alt="Image" title="Titre"></p>');
+    expect(sanitized).not.toContain("javascript:");
+    expect(sanitized).not.toContain("data:image");
+    const parsed = parsePastedHTML(sanitized);
+    expect(documentToJSON(parsed)).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "dangereux" },
+            { type: "text", marks: [{ type: "link", attrs: { href: "/guide", title: "Guide" } }], text: "sûr" },
+            { type: "text", text: "[Image: Temporaire]" },
+            { type: "image", attrs: { src: "https://example.test/image.png", alt: "Image", title: "Titre" } },
+          ],
+        },
+      ],
+    });
   });
 
   it.each([

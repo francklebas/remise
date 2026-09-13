@@ -28,6 +28,10 @@ The schema supports paragraphs, headings, bold, italic, strike-through, links, i
 
 Markdown images are represented directly by their `src`, `alt`, and optional `title`, without upload or URL transformation. Horizontal separators are intentionally rejected for now because the current document schema cannot represent them. The Markdown buffer remains intact and the editor stays in Markdown mode when that happens, so no content is silently discarded. Syntax highlighting is not included yet: code blocks are visually distinct and retain their language, leaving highlighting as a presentation-only future addition.
 
+Rich Text paste keeps ProseMirror’s native clipboard behavior: it prefers HTML, then falls back to plain text. Before ProseMirror parses HTML, Remise removes executable markup, tracking/style attributes and unsafe URLs while preserving supported semantic structure. HTML code blocks retain a `language-*` or `lang-*` class value as `code_block.attrs.language`; images remain external URLs and clipboard image files are not uploaded or converted to base64.
+
+Documentary tables use the official ProseMirror table model: header cells and regular cells remain distinct, and the Rich Text editor supports native cell selection and Tab navigation. Markdown uses standard pipe tables. Because that format always treats its first row as headers, a Rich Text table without a header row, a table with headers outside its first row, or a cell containing multiple blocks cannot be converted to Markdown without loss; Remise keeps Rich Text active and reports that limitation instead of changing the document.
+
 Run the editor conversion tests with:
 
 ```sh
