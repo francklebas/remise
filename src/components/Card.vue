@@ -113,7 +113,7 @@ function save() {
       </label>
       <div class="form-control w-full">
         <span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Description</span>
-        <ContentEditor :model-value="description" @update:model-value="updateDescription" />
+        <ContentEditor :model-value="description" :card-id="props.card.id" @update:model-value="updateDescription" />
         <div class="mt-2 flex min-h-5 items-center gap-2 text-xs text-base-content/50" aria-live="polite">
           <span v-if="saveStatus === 'saving'">Enregistrement…</span>
           <template v-else-if="saveStatus === 'error'"><span class="text-error">Modifications non enregistrées.</span><button class="link link-error" type="button" @click="emit('retry', props.card.id)">Réessayer</button></template>

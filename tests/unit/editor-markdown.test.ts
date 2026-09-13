@@ -16,6 +16,7 @@ import { handleSmartLinkPaste } from "@/editor/smart-links";
 import { detectDocumentFormat, DocumentImportError, importDocumentFile, insertImportedDocument } from "@/editor/importers";
 import { codeHighlightPluginKey, highlightCode, resolveHighlightLanguage } from "@/editor/code-highlight";
 import { copyCodeBlockText } from "@/editor/code-block-view";
+import { MAX_IMAGE_BYTES, ImageUploadError, prepareImage } from "@/editor/media";
 
 function roundTripMarkdown(markdown: string) {
   return markdownToDocument(documentToMarkdown(markdownToDocument(markdown)));
@@ -89,6 +90,11 @@ async function createDocxWithEmbeddedImage(alt: string): Promise<File> {
 }
 
 describe("ProseMirror editorial document", () => {
+  it("validates local image inputs before decoding or uploading", async () => {
+    await expect(prepareImage(new File(["<svg></svg>"], "diagram.svg", { type: "image/svg+xml" }))).rejects.toBeInstanceOf(ImageUploadError);
+    await expect(prepareImage(new File([new Uint8Array(MAX_IMAGE_BYTES + 1)], "huge.png", { type: "image/png" }))).rejects.toMatchObject({ message: expect.stringContaining("20 Mo") });
+  });
+
   it("applies compact Markdown input rules while keeping the ProseMirror document canonical", () => {
     const cases = [
       { input: "# ", node: "heading", attrs: { level: 1 } },
@@ -439,7 +445,7 @@ describe("ProseMirror editorial document", () => {
             { type: "text", text: " " },
             { type: "text", marks: [{ type: "link", attrs: { href: "https://example.test/page", title: "Page" } }], text: "lié" },
             { type: "text", text: " " },
-            { type: "image", attrs: { src: "/images/logo.png", alt: "Logo", title: "Marque" } },
+            { type: "image", attrs: { src: "/images/logo.png", storagePath: null, alt: "Logo", title: "Marque" } },
           ],
         },
       ],
@@ -469,7 +475,7 @@ describe("ProseMirror editorial document", () => {
             { type: "text", text: "dangereux" },
             { type: "text", marks: [{ type: "link", attrs: { href: "/guide", title: "Guide" } }], text: "sûr" },
             { type: "text", text: "[Image: Temporaire]" },
-            { type: "image", attrs: { src: "https://example.test/image.png", alt: "Image", title: "Titre" } },
+            { type: "image", attrs: { src: "https://example.test/image.png", storagePath: null, alt: "Image", title: "Titre" } },
           ],
         },
       ],
@@ -486,11 +492,11 @@ describe("ProseMirror editorial document", () => {
     const document = markdownToDocument(markdown);
     const image = document.firstChild!.firstChild!;
     expect(image.type.name).toBe("image");
-    expect(image.attrs).toEqual({ src, alt, title });
+    expect(image.attrs).toEqual({ src, storagePath: null, alt, title });
 
     const serialized = documentToMarkdown(document);
     const restored = markdownToDocument(serialized);
-    expect(restored.firstChild!.firstChild!.attrs).toEqual({ src, alt, title });
+    expect(restored.firstChild!.firstChild!.attrs).toEqual({ src, storagePath: null, alt, title });
     expect(serialized).toBe(markdown);
   });
 

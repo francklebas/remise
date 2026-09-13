@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Bold, Code2, Italic, Link, List, ListOrdered, Plus, Quote, Strikethrough, Table2, Upload } from "@lucide/vue";
-import { TextSelection } from "prosemirror-state";
+import { Selection, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { setBlockType, toggleMark, wrapIn } from "prosemirror-commands";
 import { wrapInList } from "prosemirror-schema-list";
@@ -14,8 +14,10 @@ import { sanitizePastedHTML } from "@/editor/clipboard";
 import { handleSmartLinkPaste } from "@/editor/smart-links";
 import { DocumentImportError, importDocumentFile, insertImportedDocument } from "@/editor/importers";
 import { createCodeBlockNodeView } from "@/editor/code-block-view";
+import { createImageNodeView } from "@/editor/image-view";
+import { ImageUploadError, isTemporaryImageSource, prepareImage, uploadImage as uploadPreparedImage } from "@/editor/media";
 
-const props = defineProps<{ modelValue: CardDescription }>();
+const props = defineProps<{ modelValue: CardDescription; cardId: string }>();
 const emit = defineEmits<{ "update:modelValue": [value: ReturnType<typeof documentToJSON>] }>();
 
 const editorElement = ref<HTMLElement>();
@@ -23,10 +25,13 @@ const editingMode = ref<"rich" | "markdown">("rich");
 const markdown = ref("");
 const conversionError = ref("");
 const fileInput = ref<HTMLInputElement>();
+const imageInput = ref<HTMLInputElement>();
 const blockMenu = ref<HTMLDetailsElement>();
 const tableMenu = ref<HTMLDetailsElement>();
 const importError = ref("");
 const isImporting = ref(false);
+const pendingImageRetries = new Map<string, { file: File; cardId: string }>();
+const failedImagePreview = ref<string | null>(null);
 const isTableSelection = ref(false);
 const floatingToolbar = ref({ visible: false, left: 0, top: 0 });
 const activeMarks = ref({ strong: false, em: false, strike: false, code: false, link: false });
@@ -35,7 +40,10 @@ let view: EditorView | undefined;
 const isRichText = computed(() => editingMode.value === "rich");
 
 function publish() {
-  if (view) emit("update:modelValue", documentToJSON(view.state.doc));
+  if (!view) return;
+  let hasTemporaryImage = false;
+  view.state.doc.descendants((node) => { if (node.type.name === "image" && isTemporaryImageSource(node.attrs.src)) hasTemporaryImage = true; });
+  if (!hasTemporaryImage) emit("update:modelValue", documentToJSON(view.state.doc));
 }
 
 function dispatchCommand(command: (state: NonNullable<typeof view>["state"], dispatch?: NonNullable<typeof view>["dispatch"]) => boolean) {
@@ -164,7 +172,16 @@ async function importFile(file: File, position?: number) {
   isImporting.value = true;
   importError.value = "";
   try {
-    insertImportedDocument(view, await importDocumentFile(file), position);
+    insertImportedDocument(view, await importDocumentFile(file, {
+      uploadEmbeddedImage: async (embeddedFile) => {
+        const prepared = await prepareImage(embeddedFile);
+        try {
+          return (await uploadPreparedImage(prepared.file, props.cardId)).src;
+        } finally {
+          URL.revokeObjectURL(prepared.previewUrl);
+        }
+      },
+    }), position);
     publish();
   } catch (error) {
     importError.value = error instanceof DocumentImportError ? error.message : "Import impossible.";
@@ -173,14 +190,87 @@ async function importFile(file: File, position?: number) {
   }
 }
 
+async function insertLocalImage(file: File, position?: number) {
+  if (!view) return;
+  importError.value = "";
+  failedImagePreview.value = null;
+  let previewUrl: string | undefined;
+  try {
+    const prepared = await prepareImage(file);
+    previewUrl = prepared.previewUrl;
+    let transaction = view.state.tr;
+    if (position !== undefined) {
+      const safePosition = Math.max(0, Math.min(position, view.state.doc.content.size));
+      transaction = transaction.setSelection(Selection.near(view.state.doc.resolve(safePosition)));
+    }
+    transaction = transaction.replaceSelectionWith(editorSchema.nodes.image.create({ src: prepared.previewUrl, storagePath: null, alt: file.name.replace(/\.[^.]+$/, ""), title: null }));
+    view.dispatch(transaction.scrollIntoView());
+    pendingImageRetries.set(prepared.previewUrl, { file, cardId: props.cardId });
+    const uploaded = await uploadPreparedImage(prepared.file, props.cardId);
+    // The editor may have been closed while the request was in flight.
+    if (!view) {
+      pendingImageRetries.delete(prepared.previewUrl);
+      URL.revokeObjectURL(prepared.previewUrl);
+      return;
+    }
+    let imagePosition: number | undefined;
+    view.state.doc.descendants((node, nodePosition) => { if (node.type.name === "image" && node.attrs.src === prepared.previewUrl) imagePosition = nodePosition; });
+    if (imagePosition !== undefined) {
+      const node = view.state.doc.nodeAt(imagePosition)!;
+      view.dispatch(view.state.tr.setNodeMarkup(imagePosition, undefined, { ...node.attrs, src: uploaded.src, storagePath: uploaded.storagePath }));
+      pendingImageRetries.delete(prepared.previewUrl);
+      publish();
+    } else {
+      // It was deleted before the upload ended. Keep the remote object for
+      // conservative post-save garbage collection, but release local state.
+      pendingImageRetries.delete(prepared.previewUrl);
+    }
+    URL.revokeObjectURL(prepared.previewUrl);
+  } catch (error) {
+    if (previewUrl && pendingImageRetries.has(previewUrl)) failedImagePreview.value = previewUrl;
+    importError.value = error instanceof ImageUploadError ? error.message : "Upload de l’image impossible.";
+  }
+}
+
+async function retryFailedImage(previewUrl: string) {
+  const retry = pendingImageRetries.get(previewUrl);
+  if (!retry || !view) return;
+  try {
+    const prepared = await prepareImage(retry.file);
+    const uploaded = await uploadPreparedImage(prepared.file, retry.cardId);
+    if (!view) return;
+    let imagePosition: number | undefined;
+    view.state.doc.descendants((node, nodePosition) => { if (node.type.name === "image" && node.attrs.src === previewUrl) imagePosition = nodePosition; });
+    if (imagePosition === undefined) return;
+    const node = view.state.doc.nodeAt(imagePosition)!;
+    view.dispatch(view.state.tr.setNodeMarkup(imagePosition, undefined, { ...node.attrs, src: uploaded.src, storagePath: uploaded.storagePath }));
+    pendingImageRetries.delete(previewUrl);
+    URL.revokeObjectURL(previewUrl);
+    failedImagePreview.value = null;
+    importError.value = "";
+    publish();
+  } catch (error) {
+    failedImagePreview.value = previewUrl;
+    importError.value = error instanceof ImageUploadError ? error.message : "Nouvelle tentative d’upload impossible.";
+  }
+}
+
 function openFilePicker() {
   closeBlockMenu();
   fileInput.value?.click();
 }
 
+function openImagePicker() { closeBlockMenu(); imageInput.value?.click(); }
+
 function handleFilePicker(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
   if (file) void importFile(file);
+  (event.target as HTMLInputElement).value = "";
+}
+
+function handleImagePicker(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (file) void insertLocalImage(file);
   (event.target as HTMLInputElement).value = "";
 }
 
@@ -193,14 +283,16 @@ function handleEditorDrop(event: DragEvent) {
   if (!file) return;
   event.preventDefault();
   const position = view?.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
-  void importFile(file, position);
+  if (file.type.startsWith("image/")) void insertLocalImage(file, position);
+  else void importFile(file, position);
 }
 
 function handleEditorPaste(editorView: EditorView, event: ClipboardEvent) {
   if (editorView.state.selection.$from.parent.type === editorSchema.nodes.code_block) return false;
   const file = event.clipboardData?.files[0];
   if (file) {
-    void importFile(file);
+    if (file.type.startsWith("image/")) void insertLocalImage(file);
+    else void importFile(file);
     return true;
   }
   return handleSmartLinkPaste(editorView, event);
@@ -241,7 +333,7 @@ onMounted(() => {
     transformPastedHTML: sanitizePastedHTML,
     handlePaste: handleEditorPaste,
     handleKeyDown: handleEditorKeyDown,
-    nodeViews: { code_block: createCodeBlockNodeView() },
+    nodeViews: { code_block: createCodeBlockNodeView(), image: createImageNodeView() },
   });
   updateEditorUI();
   window.addEventListener("resize", updateEditorUI);
@@ -251,7 +343,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("resize", updateEditorUI);
   window.removeEventListener("scroll", updateEditorUI, true);
+  for (const previewUrl of pendingImageRetries.keys()) URL.revokeObjectURL(previewUrl);
+  pendingImageRetries.clear();
   view?.destroy();
+  view = undefined;
 });
 </script>
 
@@ -259,6 +354,7 @@ onBeforeUnmount(() => {
   <section class="content-editor rounded-box border border-base-300 bg-base-100">
     <div class="flex items-center gap-2 border-b border-base-300 p-2">
       <input ref="fileInput" type="file" class="hidden" accept=".txt,.md,.markdown,.html,.htm,.docx,text/plain,text/markdown,text/html,application/vnd.openxmlformats-officedocument.wordprocessingml.document" @change="handleFilePicker" />
+      <input ref="imageInput" type="file" class="hidden" accept="image/jpeg,image/png,image/webp,image/gif" @change="handleImagePicker" />
       <div class="join">
         <button class="btn btn-xs join-item" :class="{ 'btn-primary': isRichText }" type="button" @click="setMode('rich')">Rich Text</button>
         <button class="btn btn-xs join-item" :class="{ 'btn-primary': !isRichText }" type="button" @click="setMode('markdown')">Markdown</button>
@@ -279,6 +375,7 @@ onBeforeUnmount(() => {
             <button class="btn btn-ghost btn-sm w-full justify-start" type="button" @click="dispatchCommand(wrapInList(editorSchema.nodes.bullet_list)); closeBlockMenu()"><List :size="15" /> Liste à puces</button>
             <button class="btn btn-ghost btn-sm w-full justify-start" type="button" @click="dispatchCommand(wrapInList(editorSchema.nodes.ordered_list)); closeBlockMenu()"><ListOrdered :size="15" /> Liste numérotée</button>
             <button class="btn btn-ghost btn-sm w-full justify-start" type="button" @click="insertTable"><Table2 :size="15" /> Tableau</button>
+            <button class="btn btn-ghost btn-sm w-full justify-start" type="button" @click="openImagePicker">Image</button>
             <button class="btn btn-ghost btn-sm w-full justify-start" type="button" :disabled="isImporting" @click="openFilePicker"><Upload :size="15" /> {{ isImporting ? "Import…" : "Importer" }}</button>
           </div>
         </details>
@@ -316,7 +413,10 @@ onBeforeUnmount(() => {
     <div v-show="isRichText" ref="editorElement" class="content-editor__rich" @dragover="handleEditorDragOver" @drop="handleEditorDrop" />
     <textarea v-if="!isRichText" v-model="markdown" class="content-editor__markdown textarea w-full rounded-none border-0 bg-base-100 font-mono text-sm leading-relaxed focus:outline-none" aria-label="Markdown de la description" spellcheck="false" />
     <p v-if="conversionError" class="border-t border-error/25 bg-error/10 px-3 py-2 text-xs text-error" role="alert">{{ conversionError }}</p>
-    <p v-if="importError" class="border-t border-error/25 bg-error/10 px-3 py-2 text-xs text-error" role="alert">{{ importError }}</p>
+    <p v-if="importError" class="flex items-center gap-2 border-t border-error/25 bg-error/10 px-3 py-2 text-xs text-error" role="alert">
+      {{ importError }}
+      <button v-if="failedImagePreview" class="btn btn-ghost btn-xs" type="button" @click="retryFailedImage(failedImagePreview)">Réessayer</button>
+    </p>
   </section>
 </template>
 

@@ -39,6 +39,7 @@ const nodes = addListNodes(basicSchema.spec.nodes, "paragraph block*", "block")
     draggable: true,
     attrs: {
       src: { validate: "string" },
+      storagePath: { default: null, validate: "string|null" },
       alt: { default: "", validate: "string" },
       title: { default: null, validate: "string|null" },
     },
@@ -47,12 +48,13 @@ const nodes = addListNodes(basicSchema.spec.nodes, "paragraph block*", "block")
         tag: "img[src]",
         getAttrs: (element) => ({
           src: (element as HTMLImageElement).getAttribute("src") ?? "",
+          storagePath: null,
           alt: (element as HTMLImageElement).getAttribute("alt") ?? "",
           title: (element as HTMLImageElement).getAttribute("title"),
         }),
       },
     ],
-    toDOM: (node) => ["img", { src: node.attrs.src, alt: node.attrs.alt, title: node.attrs.title }],
+    toDOM: (node) => ["img", { src: node.attrs.src, alt: node.attrs.alt, title: node.attrs.title, "data-storage-path": node.attrs.storagePath }],
   })
   .update("code_block", {
     attrs: { language: { default: "" } },

@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc -b && vite build",
-    "build:development": "vue-tsc -b && vite build --mode development",
-    "build:production": "vue-tsc -b && vite build --mode production",
+    "build": "vue-tsc -b && tsc -p tsconfig.worker.json && vite build",
+    "build:development": "vue-tsc -b && tsc -p tsconfig.worker.json && vite build --mode development",
+    "build:production": "vue-tsc -b && tsc -p tsconfig.worker.json && vite build --mode production",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
@@ -39,6 +39,7 @@
     "vue": "^3.5.42"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260911.1",
     "@playwright/test": "^1.63.0",
     "@types/markdown-it": "^14.2.0",
     "@types/node": "^24.13.3",

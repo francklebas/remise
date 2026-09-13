@@ -8,6 +8,7 @@ import { sanitizePastedHTML } from "@/editor/clipboard";
 import { editorSchema } from "@/editor/schema";
 
 export type DocumentFormat = "text" | "markdown" | "html" | "docx";
+export type EmbeddedImageUploader = (file: File) => Promise<string>;
 
 export class DocumentImportError extends Error {
   constructor(message: string) {
@@ -53,7 +54,7 @@ export function htmlToDocument(html: string): ProseMirrorNode {
   return ProseMirrorDOMParser.fromSchema(editorSchema).parse(container);
 }
 
-async function docxToDocument(file: File): Promise<ProseMirrorNode> {
+async function docxToDocument(file: File, uploadEmbeddedImage?: EmbeddedImageUploader): Promise<ProseMirrorNode> {
   const arrayBuffer = await file.arrayBuffer();
   // Mammoth's Node build expects Buffer; Vite resolves its browser unzipper,
   // which accepts ArrayBuffer. This also lets the same importer use a real
@@ -64,17 +65,28 @@ async function docxToDocument(file: File): Promise<ProseMirrorNode> {
   };
   const buffer = runtime.Buffer?.from(arrayBuffer);
   const input = runtime.process?.versions?.node && buffer ? { buffer } : { arrayBuffer };
-  const result = await mammoth.convertToHtml(input as Parameters<typeof mammoth.convertToHtml>[0]);
+  const result = await mammoth.convertToHtml(input as Parameters<typeof mammoth.convertToHtml>[0], uploadEmbeddedImage ? {
+    convertImage: mammoth.images.imgElement(async (image) => {
+      try {
+        const bytes = await image.readAsArrayBuffer();
+        return { src: await uploadEmbeddedImage(new File([bytes], "image", { type: image.contentType })) };
+      } catch {
+        // Empty src is sanitized into an explicit [Image] fallback while the
+        // surrounding DOCX content continues to import.
+        return { src: "" };
+      }
+    }),
+  } : undefined);
   if (!result.value.trim()) throw new DocumentImportError("Ce document DOCX ne contient aucun contenu importable.");
   return htmlToDocument(result.value);
 }
 
-export async function importDocumentFile(file: File): Promise<ProseMirrorNode> {
+export async function importDocumentFile(file: File, options?: { uploadEmbeddedImage?: EmbeddedImageUploader }): Promise<ProseMirrorNode> {
   const format = detectDocumentFormat(file);
   if (!format) throw new DocumentImportError("Format non pris en charge. Utilisez TXT, Markdown, HTML ou DOCX.");
 
   try {
-    if (format === "docx") return await docxToDocument(file);
+    if (format === "docx") return await docxToDocument(file, options?.uploadEmbeddedImage);
     const content = await file.text();
     if (format === "markdown") return markdownToDocument(content);
     if (format === "html") return htmlToDocument(content);

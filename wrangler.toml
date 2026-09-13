@@ -1,0 +1,17 @@
+name = "remise-media"
+main = "worker/media.ts"
+account_id = "ee180afe02d23fe883f7b2d1095c88d4"
+compatibility_date = "2026-09-13"
+
+routes = [
+  { pattern = "boardly.francklebas.com/api/media*", zone_name = "francklebas.com" },
+  { pattern = "boardly.francklebas.com/media/*", zone_name = "francklebas.com" },
+]
+
+[[r2_buckets]]
+binding = "CARD_IMAGES"
+bucket_name = "remise-card-images"
+
+# Set these as Worker secrets before deployment:
+# wrangler secret put SUPABASE_URL
+# wrangler secret put SUPABASE_ANON_KEY
