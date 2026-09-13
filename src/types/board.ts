@@ -14,7 +14,10 @@ export interface Card {
   estimatedDuration: number | null;
   complexity: CardComplexity;
   columnId: string;
+  position: number;
 }
+
+export type CardSaveStatus = "saved" | "saving" | "error";
 
 export type CardComplexity = "low" | "medium" | "high";
 

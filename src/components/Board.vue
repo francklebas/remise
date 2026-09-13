@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref } from "vue";
 import Column from "@/components/Column.vue";
 import { useBoardStore } from "@/stores/board";
+import { descriptionToPlainText } from "@/editor/document";
 
 const store = useBoardStore();
 const draggedCardId = ref<string | null>(null);
@@ -13,7 +14,7 @@ const visibleColumns = computed(() => {
 
   return store.columns.map((column) => ({
     ...column,
-    cards: column.cards.filter((card) => normalize(`${card.title} ${card.description}`).includes(query)),
+    cards: column.cards.filter((card) => normalize(`${card.title} ${descriptionToPlainText(card.description)}`).includes(query)),
   }));
 });
 const totalCardCount = computed(() => store.columns.reduce((total, column) => total + column.cards.length, 0));
@@ -37,12 +38,16 @@ const dropCard = (targetColumnId: string, targetIndex: number) => {
 };
 
 onMounted(() => {
+  void store.load();
   const cardId = new URLSearchParams(window.location.search).get("card");
   if (cardId) void nextTick(() => document.getElementById(cardId)?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }));
 });
 </script>
 
 <template>
+  <div v-if="store.isLoading" class="grid min-h-72 place-items-center"><span class="loading loading-spinner loading-md text-primary" aria-label="Chargement des cartes" /></div>
+  <div v-else-if="store.loadError" class="alert alert-error"><span>{{ store.loadError }}</span><button class="btn btn-sm" @click="store.load">Réessayer</button></div>
+  <template v-else>
   <div class="mb-7 flex items-end justify-between gap-4">
     <div>
       <p class="mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.18em] text-primary"><span class="size-2 rounded-full bg-primary"></span>{{ store.activeWorkspace.name }}</p>
@@ -71,4 +76,5 @@ onMounted(() => {
       <span class="text-xl">+</span> Ajouter une colonne
     </button>
   </div>
+  </template>
 </template>

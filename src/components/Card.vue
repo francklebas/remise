@@ -1,17 +1,19 @@
 <script lang="ts" setup>
 import { computed, ref } from "vue";
 import { CalendarDays, MoreHorizontal, Trash2 } from "@lucide/vue";
-import type { Card, CardComplexity } from "@/types/board";
+import type { Card, CardComplexity, CardSaveStatus } from "@/types/board";
 import ContentEditor from "@/components/ContentEditor.vue";
 import { descriptionToPlainText, type CardDescription } from "@/editor/document";
 
 interface CardProps {
   card: Card;
+  saveStatus: CardSaveStatus;
 }
 
 export interface CardUpdateEvent {
   id: string;
   patch: Partial<Pick<Card, "title" | "description" | "dueDate" | "dueTime" | "estimatedDuration" | "complexity">>;
+  notify?: boolean;
 }
 
 const props = defineProps<CardProps>();
@@ -20,6 +22,8 @@ const emit = defineEmits<{
   remove: [id: string];
   dragStart: [id: string];
   dragEnd: [];
+  flush: [id: string];
+  retry: [id: string];
 }>();
 
 const title = ref(props.card.title);
@@ -42,7 +46,17 @@ function openEditor() {
 }
 
 function closeEditor() {
+  emit("flush", props.card.id);
   editorDialog.value?.close();
+}
+
+function updateDescription(value: CardDescription) {
+  description.value = value;
+  emit("update", { id: props.card.id, patch: { description: value } });
+}
+
+function updateTitle() {
+  emit("update", { id: props.card.id, patch: { title: title.value.trim() || "Nouvelle tâche" } });
 }
 
 function save() {
@@ -56,6 +70,7 @@ function save() {
       estimatedDuration: estimatedDuration.value && estimatedDuration.value > 0 ? estimatedDuration.value : null,
       complexity: complexity.value,
     },
+    notify: true,
   });
   closeEditor();
 }
@@ -89,16 +104,20 @@ function save() {
           <h2 id="card-editor-title" class="mt-1 text-xl font-black">Modifier la carte</h2>
         </div>
         <form method="dialog">
-          <button class="btn btn-circle btn-ghost btn-sm" aria-label="Fermer">×</button>
+          <button class="btn btn-circle btn-ghost btn-sm" aria-label="Fermer" @click="closeEditor">×</button>
         </form>
       </div>
       <label class="form-control mb-4 w-full">
         <span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Titre</span>
-        <input v-model="title" class="input input-bordered w-full font-semibold" autofocus @keyup.esc="closeEditor" @keyup.ctrl.enter="save" />
+        <input v-model="title" class="input input-bordered w-full font-semibold" autofocus @input="updateTitle" @keyup.esc="closeEditor" @keyup.ctrl.enter="save" />
       </label>
       <div class="form-control w-full">
         <span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Description</span>
-        <ContentEditor v-model="description" />
+        <ContentEditor :model-value="description" @update:model-value="updateDescription" />
+        <div class="mt-2 flex min-h-5 items-center gap-2 text-xs text-base-content/50" aria-live="polite">
+          <span v-if="saveStatus === 'saving'">Enregistrement…</span>
+          <template v-else-if="saveStatus === 'error'"><span class="text-error">Modifications non enregistrées.</span><button class="link link-error" type="button" @click="emit('retry', props.card.id)">Réessayer</button></template>
+        </div>
       </div>
       <div class="mt-4 grid gap-4 sm:grid-cols-2">
         <label class="form-control w-full">
@@ -135,7 +154,7 @@ function save() {
       </div>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button aria-label="Fermer l’éditeur">Fermer</button>
+      <button aria-label="Fermer l’éditeur" @click="closeEditor">Fermer</button>
     </form>
   </dialog>
 </template>

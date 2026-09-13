@@ -24,7 +24,7 @@ const updateColumn = (e: Event) => {
 };
 
 const updateCard = (event: CardUpdateEvent) => {
-  store.updateCard(props.column.id, event.id, event.patch);
+  store.updateCard(props.column.id, event.id, event.patch, event.notify);
 };
 
 const removeCard = (cardId: string) => {
@@ -65,7 +65,7 @@ const clearDragOver = () => {
     </header>
     <div class="flex min-h-28 flex-col gap-3 rounded-2xl bg-base-300/55 p-3" @dragover.prevent="setDragOver(props.column.cards.length)" @drop="dropAt(props.column.cards.length)" @dragleave.self="clearDragOver">
       <div v-for="(card, index) in props.column.cards" :key="card.id" class="rounded-xl border-2 border-transparent transition-colors" :class="{ 'border-primary/60 bg-primary/10': dragOverIndex === index && draggedCardId !== card.id }" @dragover.prevent.stop="setDragOver(index)" @drop.prevent.stop="dropAt(index)">
-        <Card :card="card" @update="updateCard" @remove="removeCard" @drag-start="emit('dragStart', $event)" @drag-end="emit('dragEnd')" />
+        <Card :card="card" :save-status="store.saveStates[card.id] ?? 'saved'" @update="updateCard" @remove="removeCard" @flush="store.flushCard" @retry="store.retryCard" @drag-start="emit('dragStart', $event)" @drag-end="emit('dragEnd')" />
       </div>
       <button class="btn btn-ghost btn-sm justify-start gap-2 text-base-content/55" @click="store.addCard(props.column.id)">
         <Plus :size="16" /> Ajouter une carte
