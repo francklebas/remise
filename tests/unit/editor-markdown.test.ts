@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { DOMParser as ProseMirrorDOMParser } from "prosemirror-model";
 import { TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
+import { addColumnAfter, addColumnBefore, addRowAfter, addRowBefore, deleteColumn, deleteRow, deleteTable } from "prosemirror-tables";
+import JSZip from "jszip";
 import { documentToJSON, emptyDocument, normalizeDescription } from "@/editor/document";
 import { documentToMarkdown, markdownToDocument, MarkdownConversionError } from "@/editor/markdown";
 import { editorSchema } from "@/editor/schema";
@@ -11,6 +13,7 @@ import { createTable } from "@/editor/state";
 import { createEditorState } from "@/editor/state";
 import { fallbackRichLinkMetadata, resolveLinkMetadata } from "@/editor/rich-links";
 import { handleSmartLinkPaste } from "@/editor/smart-links";
+import { detectDocumentFormat, DocumentImportError, importDocumentFile, insertImportedDocument } from "@/editor/importers";
 
 function roundTripMarkdown(markdown: string) {
   return markdownToDocument(documentToMarkdown(markdownToDocument(markdown)));
@@ -34,15 +37,125 @@ function createEditorView(document: ReturnType<typeof emptyDocument>, selection?
   return view;
 }
 
+function typeIntoEditor(view: EditorView, text: string) {
+  for (const character of text) {
+    const { from, to } = view.state.selection;
+    const handled = view.someProp("handleTextInput", (handler) => handler(view, from, to, character));
+    if (!handled) view.dispatch(view.state.tr.insertText(character, from, to));
+  }
+}
+
+function selectFirstTableCell(view: EditorView) {
+  let cellPosition: number | undefined;
+  view.state.doc.descendants((node, position) => {
+    if (node.type.name === "table_cell" && cellPosition === undefined) cellPosition = position;
+  });
+  if (cellPosition === undefined) throw new Error("Expected a table cell");
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, cellPosition + 2)));
+}
+
 const documentGlobal = document;
 
+async function createDocxWithEmbeddedImage(alt: string): Promise<File> {
+  const zip = new JSZip();
+  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?>
+    <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+      <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+      <Default Extension="xml" ContentType="application/xml"/>
+      <Default Extension="png" ContentType="image/png"/>
+      <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+    </Types>`);
+  zip.file("_rels/.rels", `<?xml version="1.0" encoding="UTF-8"?>
+    <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+      <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+    </Relationships>`);
+  zip.file("word/_rels/document.xml.rels", `<?xml version="1.0" encoding="UTF-8"?>
+    <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+      <Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
+    </Relationships>`);
+  zip.file("word/document.xml", `<?xml version="1.0" encoding="UTF-8"?>
+    <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+      <w:body>
+        <w:p><w:r><w:t>Avant l’image</w:t></w:r></w:p>
+        <w:p><w:r><w:drawing><wp:inline><wp:docPr id="1" name="image" descr="${alt}"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:blipFill><a:blip r:embed="rIdImage"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
+        <w:sectPr/>
+      </w:body>
+    </w:document>`);
+  zip.file("word/media/image1.png", Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL7WQAAAABJRU5ErkJggg=="), (character) => character.charCodeAt(0)));
+  const bytes = await zip.generateAsync({ type: "uint8array" });
+  return new File([bytes], "illustration.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+}
+
 describe("ProseMirror editorial document", () => {
+  it("applies compact Markdown input rules while keeping the ProseMirror document canonical", () => {
+    const cases = [
+      { input: "# ", node: "heading", attrs: { level: 1 } },
+      { input: "## ", node: "heading", attrs: { level: 2 } },
+      { input: "### ", node: "heading", attrs: { level: 3 } },
+      { input: "> ", node: "blockquote" },
+      { input: "- ", node: "bullet_list" },
+      { input: "1. ", node: "ordered_list" },
+      { input: "```sh ", node: "code_block", attrs: { language: "sh" } },
+    ];
+
+    for (const testCase of cases) {
+      const view = createEditorView(emptyDocument());
+      typeIntoEditor(view, testCase.input);
+      const node = view.state.doc.firstChild!;
+      expect(node.type.name).toBe(testCase.node);
+      if (testCase.attrs) expect(node.attrs).toMatchObject(testCase.attrs);
+      view.destroy();
+    }
+  });
+
   it("creates an empty canonical document and normalizes legacy plain text at the read boundary", () => {
     expect(documentToJSON(emptyDocument())).toEqual({ type: "doc", content: [{ type: "paragraph" }] });
     expect(documentToJSON(normalizeDescription("Texte historique"))).toEqual({
       type: "doc",
       content: [{ type: "paragraph", content: [{ type: "text", text: "Texte historique" }] }],
     });
+  });
+
+  it("detects supported document formats using MIME and extension", () => {
+    expect(detectDocumentFormat(new File(["x"], "notes.markdown", { type: "" }))).toBe("markdown");
+    expect(detectDocumentFormat(new File(["x"], "page", { type: "text/html" }))).toBe("html");
+    expect(detectDocumentFormat(new File(["x"], "legacy.doc", { type: "application/msword" }))).toBeNull();
+  });
+
+  it("imports TXT, Markdown and HTML through their existing content pipelines", async () => {
+    const text = await importDocumentFile(new File(["Une ligne\n\nDeuxième paragraphe"], "notes.txt", { type: "text/plain" }));
+    expect(text.childCount).toBe(2);
+    const markdown = await importDocumentFile(new File(["# Titre\n\n**important**"], "notes.md", { type: "text/plain" }));
+    expect(markdown.firstChild!.type.name).toBe("heading");
+    const html = await importDocumentFile(new File(["<h2>HTML</h2><p><strong>riche</strong></p>"], "notes.html", { type: "text/html" }));
+    expect(html.firstChild!.type.name).toBe("heading");
+    expect(html.lastChild!.firstChild!.marks[0]!.type.name).toBe("strong");
+  });
+
+  it("rejects unknown document formats without changing the editor document", async () => {
+    await expect(importDocumentFile(new File(["x"], "archive.pdf", { type: "application/pdf" }))).rejects.toBeInstanceOf(DocumentImportError);
+  });
+
+  it("imports a real DOCX fixture and preserves embedded image alt text without persisting a Data URL", async () => {
+    const document = await importDocumentFile(await createDocxWithEmbeddedImage("Diagramme de flux"));
+    expect(document.textContent).toContain("Avant l’image");
+    expect(document.textContent).toContain("[Image: Diagramme de flux]");
+    let hasImageNode = false;
+    document.descendants((node) => { if (node.type.name === "image") hasImageNode = true; });
+    expect(hasImageNode).toBe(false);
+  });
+
+  it("inserts imported content at an explicit drop position", () => {
+    const initial = editorSchema.nodes.doc.create(null, [
+      editorSchema.nodes.paragraph.create(null, editorSchema.text("Premier")),
+      editorSchema.nodes.paragraph.create(null, editorSchema.text("Second")),
+    ]);
+    const imported = editorSchema.nodes.doc.create(null, [editorSchema.nodes.paragraph.create(null, editorSchema.text("Importé"))]);
+    const view = createEditorView(initial);
+    // Position 9 is the start of the second paragraph in this document.
+    insertImportedDocument(view, imported, 9);
+    expect(view.state.doc.textBetween(0, view.state.doc.content.size, "|")).toBe("Premier|Importé|Second");
+    view.destroy();
   });
 
   it("serializes and restores a ProseMirror JSON document", () => {
@@ -160,6 +273,50 @@ describe("ProseMirror editorial document", () => {
     expect(table.firstChild!.firstChild!.type.name).toBe("table_header");
     expect(table.child(1).firstChild!.type.name).toBe("table_cell");
     expect(table.firstChild!.firstChild!.firstChild!.type.name).toBe("paragraph");
+  });
+
+  it("applies the official table structure commands from a cell selection", () => {
+    const createTableView = () => {
+      const document = editorSchema.nodes.doc.create(null, [createTable()]);
+      const view = createEditorView(document);
+      selectFirstTableCell(view);
+      return view;
+    };
+
+    const rowBefore = createTableView();
+    expect(addRowBefore(rowBefore.state, rowBefore.dispatch)).toBe(true);
+    expect(rowBefore.state.doc.firstChild!.childCount).toBe(4);
+    rowBefore.destroy();
+
+    const rowAfter = createTableView();
+    expect(addRowAfter(rowAfter.state, rowAfter.dispatch)).toBe(true);
+    expect(rowAfter.state.doc.firstChild!.childCount).toBe(4);
+    rowAfter.destroy();
+
+    const rowDeletion = createTableView();
+    expect(deleteRow(rowDeletion.state, rowDeletion.dispatch)).toBe(true);
+    expect(rowDeletion.state.doc.firstChild!.childCount).toBe(2);
+    rowDeletion.destroy();
+
+    const columnBefore = createTableView();
+    expect(addColumnBefore(columnBefore.state, columnBefore.dispatch)).toBe(true);
+    expect(columnBefore.state.doc.firstChild!.firstChild!.childCount).toBe(4);
+    columnBefore.destroy();
+
+    const columnAfter = createTableView();
+    expect(addColumnAfter(columnAfter.state, columnAfter.dispatch)).toBe(true);
+    expect(columnAfter.state.doc.firstChild!.firstChild!.childCount).toBe(4);
+    columnAfter.destroy();
+
+    const columnDeletion = createTableView();
+    expect(deleteColumn(columnDeletion.state, columnDeletion.dispatch)).toBe(true);
+    expect(columnDeletion.state.doc.firstChild!.firstChild!.childCount).toBe(2);
+    columnDeletion.destroy();
+
+    const tableDeletion = createTableView();
+    expect(deleteTable(tableDeletion.state, tableDeletion.dispatch)).toBe(true);
+    expect(tableDeletion.state.doc.firstChild!.type.name).toBe("paragraph");
+    tableDeletion.destroy();
   });
 
   it("refuses a headerless table Markdown conversion instead of changing cell semantics", () => {

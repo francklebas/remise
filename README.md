@@ -34,6 +34,8 @@ Documentary tables use the official ProseMirror table model: header cells and re
 
 Pasting a single `http` or `https` URL into an empty Rich Text block creates a generic Rich Card. Pasting it into text creates an inline link instead, and pasting onto selected text applies a link to that selection. Rich Cards persist their URL and optional generic metadata; this version derives only a deterministic domain fallback because browser CORS prevents reliable generic metadata fetching and the project has no dedicated safe resolver. In Markdown, a card becomes `[Titre](URL)` when a title exists, otherwise the URL alone. Markdown never recreates a Rich Card automatically.
 
+Rich Text can import `.txt`, `.md`, `.markdown`, `.html`, `.htm`, and `.docx` files through the import button, file drop, or a pasted file when the browser exposes it. Imports are immediately converted into the canonical ProseMirror document and inserted at the current selection; files are never attached. DOCX conversion uses Mammoth locally before the existing HTML sanitizer and parser. PDF, DOC, ODT, RTF, spreadsheet, and CSV imports are intentionally unsupported. Embedded DOCX images have no upload target and therefore degrade to their alternative text rather than being persisted as Data URLs.
+
 Run the editor conversion tests with:
 
 ```sh

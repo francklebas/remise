@@ -2,6 +2,7 @@ import { baseKeymap, toggleMark, setBlockType } from "prosemirror-commands";
 import { history, redo, undo } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
 import { liftListItem, sinkListItem, splitListItem } from "prosemirror-schema-list";
+import { inputRules, textblockTypeInputRule, wrappingInputRule } from "prosemirror-inputrules";
 import { EditorState } from "prosemirror-state";
 import { Node as ProseMirrorNode } from "prosemirror-model";
 import { Fragment } from "prosemirror-model";
@@ -14,6 +15,15 @@ export function createEditorState(document: ProseMirrorNode): EditorState {
     doc: document,
     plugins: [
       history(),
+      inputRules({
+        rules: [
+          textblockTypeInputRule(/^(#{1,3})\s$/, editorSchema.nodes.heading, (match) => ({ level: match[1].length })),
+          textblockTypeInputRule(/^```([^\s`]*)\s$/, editorSchema.nodes.code_block, (match) => ({ language: match[1] ?? "" })),
+          wrappingInputRule(/^\s*([-+*])\s$/, editorSchema.nodes.bullet_list),
+          wrappingInputRule(/^\s*(\d+)\.\s$/, editorSchema.nodes.ordered_list, (match) => ({ order: Number(match[1]) })),
+          wrappingInputRule(/^>\s$/, editorSchema.nodes.blockquote),
+        ],
+      }),
       keymap({
         Tab: goToNextCell(1),
         "Shift-Tab": goToNextCell(-1),
