@@ -14,6 +14,8 @@ import { createEditorState } from "@/editor/state";
 import { fallbackRichLinkMetadata, resolveLinkMetadata } from "@/editor/rich-links";
 import { handleSmartLinkPaste } from "@/editor/smart-links";
 import { detectDocumentFormat, DocumentImportError, importDocumentFile, insertImportedDocument } from "@/editor/importers";
+import { codeHighlightPluginKey, highlightCode, resolveHighlightLanguage } from "@/editor/code-highlight";
+import { copyCodeBlockText } from "@/editor/code-block-view";
 
 function roundTripMarkdown(markdown: string) {
   return markdownToDocument(documentToMarkdown(markdownToDocument(markdown)));
@@ -347,6 +349,60 @@ describe("ProseMirror editorial document", () => {
       expect(documentToJSON(restored)).toEqual(documentToJSON(original));
     },
   );
+
+  it("resolves aliases for presentation only and falls back cleanly for unknown languages", () => {
+    expect(resolveHighlightLanguage("ts")).toBe("typescript");
+    expect(resolveHighlightLanguage("typescript")).toBe("typescript");
+    expect(resolveHighlightLanguage("sh")).toBe("bash");
+    expect(resolveHighlightLanguage("bash")).toBe("bash");
+    expect(resolveHighlightLanguage("foobar")).toBeNull();
+    expect(highlightCode("ts", "const value: number = 42").some((token) => token.className.includes("hljs-"))).toBe(true);
+    expect(highlightCode("foobar", "do something")).toEqual([]);
+  });
+
+  it("updates presentation decorations without adding highlighting data to the canonical JSON", () => {
+    const document = editorSchema.nodeFromJSON({
+      type: "doc",
+      content: [{ type: "code_block", attrs: { language: "ts" }, content: [{ type: "text", text: 'const value = "hello"' }] }],
+    });
+    const view = createEditorView(document);
+    const highlighted = codeHighlightPluginKey.getState(view.state)!.find();
+    expect(highlighted.length).toBeGreaterThan(0);
+    expect(documentToJSON(view.state.doc)).toEqual(documentToJSON(document));
+    expect(JSON.stringify(documentToJSON(view.state.doc))).not.toContain("hljs-");
+
+    view.dispatch(view.state.tr.insertText("\n// edited", view.state.doc.content.size - 1));
+    expect(view.state.doc.textContent).toContain("// edited");
+    expect(codeHighlightPluginKey.getState(view.state)!.find().length).toBeGreaterThan(highlighted.length);
+
+    view.dispatch(view.state.tr.setNodeMarkup(0, undefined, { language: "sh" }));
+    expect(codeHighlightPluginKey.getState(view.state)!.find().length).toBeGreaterThan(0);
+    expect(view.state.doc.firstChild!.attrs.language).toBe("sh");
+
+    view.dispatch(view.state.tr.setNodeMarkup(0, undefined, { language: "foobar" }));
+    expect(codeHighlightPluginKey.getState(view.state)!.find()).toEqual([]);
+    expect(view.state.doc.firstChild!.attrs.language).toBe("foobar");
+    view.destroy();
+  });
+
+  it("copies only the raw code text", async () => {
+    const copied: string[] = [];
+    await expect(copyCodeBlockText('const value: number = 42', { writeText: async (text) => { copied.push(text); } })).resolves.toBe(true);
+    expect(copied).toEqual(["const value: number = 42"]);
+    expect(copied[0]).not.toContain("```");
+    expect(copied[0]).not.toContain("ts");
+  });
+
+  it("keeps script-like code as text rather than executable highlighted DOM", () => {
+    const source = '<script>alert("hello")</script>';
+    const document = editorSchema.nodeFromJSON({
+      type: "doc",
+      content: [{ type: "code_block", attrs: { language: "html" }, content: [{ type: "text", text: source }] }],
+    });
+    expect(document.textContent).toBe(source);
+    expect(JSON.stringify(documentToJSON(document))).not.toContain("<span");
+    expect(highlightCode("html", source).length).toBeGreaterThan(0);
+  });
 
   it("uses a fence longer than backticks in multiline code and preserves indentation", () => {
     const original = editorSchema.nodeFromJSON({

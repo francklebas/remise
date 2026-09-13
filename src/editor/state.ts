@@ -8,6 +8,32 @@ import { Node as ProseMirrorNode } from "prosemirror-model";
 import { Fragment } from "prosemirror-model";
 import { goToNextCell, tableEditing } from "prosemirror-tables";
 import { editorSchema } from "@/editor/schema";
+import { codeHighlightPlugin } from "@/editor/code-highlight";
+
+function isCodeBlockSelection(state: EditorState) {
+  return state.selection.$from.parent.type === editorSchema.nodes.code_block;
+}
+
+function indentCodeBlock(state: EditorState, dispatch?: (transaction: import("prosemirror-state").Transaction) => void) {
+  if (!isCodeBlockSelection(state)) return false;
+  const { from, to } = state.selection;
+  if (dispatch) dispatch(state.tr.insertText("\t", from, to));
+  return true;
+}
+
+function outdentCodeBlock(state: EditorState, dispatch?: (transaction: import("prosemirror-state").Transaction) => void) {
+  if (!isCodeBlockSelection(state)) return false;
+  const { $from } = state.selection;
+  const text = $from.parent.textContent;
+  const lineStart = text.lastIndexOf("\n", $from.parentOffset - 1) + 1;
+  const indentation = text.slice(lineStart).match(/^(?:\t| {1,2})/);
+  if (!indentation) return false;
+  if (dispatch) {
+    const from = $from.start() + lineStart;
+    dispatch(state.tr.delete(from, from + indentation[0].length));
+  }
+  return true;
+}
 
 export function createEditorState(document: ProseMirrorNode): EditorState {
   return EditorState.create({
@@ -15,6 +41,7 @@ export function createEditorState(document: ProseMirrorNode): EditorState {
     doc: document,
     plugins: [
       history(),
+      codeHighlightPlugin(),
       inputRules({
         rules: [
           textblockTypeInputRule(/^(#{1,3})\s$/, editorSchema.nodes.heading, (match) => ({ level: match[1].length })),
@@ -23,6 +50,10 @@ export function createEditorState(document: ProseMirrorNode): EditorState {
           wrappingInputRule(/^\s*(\d+)\.\s$/, editorSchema.nodes.ordered_list, (match) => ({ order: Number(match[1]) })),
           wrappingInputRule(/^>\s$/, editorSchema.nodes.blockquote),
         ],
+      }),
+      keymap({
+        Tab: indentCodeBlock,
+        "Shift-Tab": outdentCodeBlock,
       }),
       keymap({
         Tab: goToNextCell(1),

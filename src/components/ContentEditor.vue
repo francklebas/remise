@@ -13,6 +13,7 @@ import { editorSchema } from "@/editor/schema";
 import { sanitizePastedHTML } from "@/editor/clipboard";
 import { handleSmartLinkPaste } from "@/editor/smart-links";
 import { DocumentImportError, importDocumentFile, insertImportedDocument } from "@/editor/importers";
+import { createCodeBlockNodeView } from "@/editor/code-block-view";
 
 const props = defineProps<{ modelValue: CardDescription }>();
 const emit = defineEmits<{ "update:modelValue": [value: ReturnType<typeof documentToJSON>] }>();
@@ -21,13 +22,11 @@ const editorElement = ref<HTMLElement>();
 const editingMode = ref<"rich" | "markdown">("rich");
 const markdown = ref("");
 const conversionError = ref("");
-const selectedLanguage = ref("");
 const fileInput = ref<HTMLInputElement>();
 const blockMenu = ref<HTMLDetailsElement>();
 const tableMenu = ref<HTMLDetailsElement>();
 const importError = ref("");
 const isImporting = ref(false);
-const isCodeBlock = ref(false);
 const isTableSelection = ref(false);
 const floatingToolbar = ref({ visible: false, left: 0, top: 0 });
 const activeMarks = ref({ strong: false, em: false, strike: false, code: false, link: false });
@@ -65,9 +64,7 @@ function isMarkActive(name: keyof typeof activeMarks.value) {
 function updateEditorUI() {
   if (!view) return;
   const { selection } = view.state;
-  isCodeBlock.value = selection.$from.parent.type === editorSchema.nodes.code_block;
   isTableSelection.value = isInTable(view.state);
-  selectedLanguage.value = isCodeBlock.value ? String(selection.$from.parent.attrs.language ?? "") : "";
   activeMarks.value = {
     strong: isMarkActive("strong"),
     em: isMarkActive("em"),
@@ -131,10 +128,6 @@ function setMode(mode: "rich" | "markdown") {
   } catch (error) {
     conversionError.value = error instanceof MarkdownConversionError ? error.message : "Impossible de convertir ce Markdown.";
   }
-}
-
-function setCodeBlockLanguage() {
-  dispatchCommand(createCodeBlockCommand(selectedLanguage.value));
 }
 
 function setParagraph() {
@@ -204,6 +197,7 @@ function handleEditorDrop(event: DragEvent) {
 }
 
 function handleEditorPaste(editorView: EditorView, event: ClipboardEvent) {
+  if (editorView.state.selection.$from.parent.type === editorSchema.nodes.code_block) return false;
   const file = event.clipboardData?.files[0];
   if (file) {
     void importFile(file);
@@ -247,6 +241,7 @@ onMounted(() => {
     transformPastedHTML: sanitizePastedHTML,
     handlePaste: handleEditorPaste,
     handleKeyDown: handleEditorKeyDown,
+    nodeViews: { code_block: createCodeBlockNodeView() },
   });
   updateEditorUI();
   window.addEventListener("resize", updateEditorUI);
@@ -287,10 +282,6 @@ onBeforeUnmount(() => {
             <button class="btn btn-ghost btn-sm w-full justify-start" type="button" :disabled="isImporting" @click="openFilePicker"><Upload :size="15" /> {{ isImporting ? "Import…" : "Importer" }}</button>
           </div>
         </details>
-        <select v-if="isCodeBlock" v-model="selectedLanguage" class="select select-ghost select-xs max-w-36 font-mono" aria-label="Langage du bloc de code" @change="setCodeBlockLanguage">
-          <option value="">Bloc de code</option>
-          <option v-for="language in ['js', 'javascript', 'ts', 'typescript', 'json', 'html', 'css', 'scss', 'vue', 'sh', 'bash', 'shell', 'zsh', 'python', 'php', 'sql', 'yaml', 'markdown']" :key="language" :value="language">{{ language }}</option>
-        </select>
         <details v-if="isTableSelection" ref="tableMenu" class="dropdown dropdown-end">
           <summary class="btn btn-ghost btn-xs" aria-label="Actions du tableau" title="Actions du tableau"><Table2 :size="15" /> Tableau</summary>
           <div class="dropdown-content z-30 mt-2 w-56 rounded-box border border-base-300 bg-base-100 p-1 shadow-lg">
