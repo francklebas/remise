@@ -86,6 +86,15 @@ const serializer = new MarkdownSerializer(
       for (const row of rows.slice(1)) state.write(`\n${renderRow(row)}`);
       state.closeBlock(node);
     },
+    rich_link(state, node) {
+      const title = node.attrs.title.trim();
+      if (title) {
+        state.write(`[${state.esc(title)}](${node.attrs.url.replace(/[()]/g, "\\$&")})`);
+      } else {
+        state.write(node.attrs.url);
+      }
+      state.closeBlock(node);
+    },
   },
   {
     ...defaultMarkdownSerializer.marks,

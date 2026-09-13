@@ -5,6 +5,34 @@ import { tableNodes } from "prosemirror-tables";
 
 const nodes = addListNodes(basicSchema.spec.nodes, "paragraph block*", "block")
   .append(tableNodes({ tableGroup: "block", cellContent: "block+", cellAttributes: {} }))
+  .append({
+    rich_link: {
+      group: "block",
+      atom: true,
+      selectable: true,
+      draggable: true,
+      attrs: {
+        url: { validate: "string" },
+        domain: { default: "", validate: "string" },
+        title: { default: "", validate: "string" },
+        description: { default: "", validate: "string" },
+        image: { default: "", validate: "string" },
+        siteName: { default: "", validate: "string" },
+      },
+      toDOM: (node) => {
+        const url = /^https?:\/\//i.test(node.attrs.url) ? node.attrs.url : "#";
+        const title = node.attrs.title || node.attrs.url;
+        const domain = node.attrs.siteName || node.attrs.domain;
+        const content = [
+          ...( /^https?:\/\//i.test(node.attrs.image) ? [["img", { class: "rich-link-card__image", src: node.attrs.image, alt: "" }]] : []),
+          ["span", { class: "rich-link-card__domain" }, domain],
+          ["span", { class: "rich-link-card__title" }, title],
+          ...(node.attrs.description ? [["span", { class: "rich-link-card__description" }, node.attrs.description]] : []),
+        ];
+        return ["a", { class: "rich-link-card", href: url, target: "_blank", rel: "noopener noreferrer", title: node.attrs.url }, ...content];
+      },
+    },
+  })
   .update("image", {
     inline: true,
     group: "inline",

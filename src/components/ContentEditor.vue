@@ -8,6 +8,7 @@ import { documentFromDescription, documentToJSON, type CardDescription } from "@
 import { documentToMarkdown, markdownToDocument, MarkdownConversionError } from "@/editor/markdown";
 import { editorSchema } from "@/editor/schema";
 import { sanitizePastedHTML } from "@/editor/clipboard";
+import { handleSmartLinkPaste } from "@/editor/smart-links";
 
 const props = defineProps<{ modelValue: CardDescription }>();
 const emit = defineEmits<{ "update:modelValue": [value: ReturnType<typeof documentToJSON>] }>();
@@ -96,6 +97,7 @@ onMounted(() => {
       if (transaction.docChanged) publish();
     },
     transformPastedHTML: sanitizePastedHTML,
+    handlePaste: handleSmartLinkPaste,
   });
 });
 

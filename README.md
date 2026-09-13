@@ -32,6 +32,8 @@ Rich Text paste keeps ProseMirror’s native clipboard behavior: it prefers HTML
 
 Documentary tables use the official ProseMirror table model: header cells and regular cells remain distinct, and the Rich Text editor supports native cell selection and Tab navigation. Markdown uses standard pipe tables. Because that format always treats its first row as headers, a Rich Text table without a header row, a table with headers outside its first row, or a cell containing multiple blocks cannot be converted to Markdown without loss; Remise keeps Rich Text active and reports that limitation instead of changing the document.
 
+Pasting a single `http` or `https` URL into an empty Rich Text block creates a generic Rich Card. Pasting it into text creates an inline link instead, and pasting onto selected text applies a link to that selection. Rich Cards persist their URL and optional generic metadata; this version derives only a deterministic domain fallback because browser CORS prevents reliable generic metadata fetching and the project has no dedicated safe resolver. In Markdown, a card becomes `[Titre](URL)` when a title exists, otherwise the URL alone. Markdown never recreates a Rich Card automatically.
+
 Run the editor conversion tests with:
 
 ```sh

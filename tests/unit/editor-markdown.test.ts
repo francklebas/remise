@@ -1,11 +1,16 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import { DOMParser as ProseMirrorDOMParser } from "prosemirror-model";
+import { TextSelection } from "prosemirror-state";
+import { EditorView } from "prosemirror-view";
 import { documentToJSON, emptyDocument, normalizeDescription } from "@/editor/document";
 import { documentToMarkdown, markdownToDocument, MarkdownConversionError } from "@/editor/markdown";
 import { editorSchema } from "@/editor/schema";
 import { sanitizePastedHTML } from "@/editor/clipboard";
 import { createTable } from "@/editor/state";
+import { createEditorState } from "@/editor/state";
+import { fallbackRichLinkMetadata, resolveLinkMetadata } from "@/editor/rich-links";
+import { handleSmartLinkPaste } from "@/editor/smart-links";
 
 function roundTripMarkdown(markdown: string) {
   return markdownToDocument(documentToMarkdown(markdownToDocument(markdown)));
@@ -16,6 +21,20 @@ function parsePastedHTML(html: string) {
   container.innerHTML = sanitizePastedHTML(html);
   return ProseMirrorDOMParser.fromSchema(editorSchema).parse(container);
 }
+
+function createPasteEvent(url: string): ClipboardEvent {
+  return { clipboardData: { getData: (type: string) => type === "text/plain" ? url : "" } } as unknown as ClipboardEvent;
+}
+
+function createEditorView(document: ReturnType<typeof emptyDocument>, selection?: TextSelection) {
+  const mount = documentGlobal.createElement("div");
+  const state = createEditorState(document);
+  const view = new EditorView(mount, { state });
+  if (selection) view.dispatch(view.state.tr.setSelection(selection));
+  return view;
+}
+
+const documentGlobal = document;
 
 describe("ProseMirror editorial document", () => {
   it("creates an empty canonical document and normalizes legacy plain text at the read boundary", () => {
@@ -42,6 +61,56 @@ describe("ProseMirror editorial document", () => {
     expect(documentToMarkdown(restored)).toContain("~~barré~~");
     expect(documentToMarkdown(restored)).toContain("[lié](https://example.test)");
     expect(documentToMarkdown(restored)).toContain("`inline`");
+  });
+
+  it("serializes a Rich Card as portable Markdown and restores only a normal link", () => {
+    const url = "https://example.test/article";
+    const card = editorSchema.nodes.rich_link.create({ ...fallbackRichLinkMetadata(url), title: "Article utile" });
+    const richDocument = editorSchema.nodes.doc.create(null, [card]);
+    expect(documentToMarkdown(richDocument)).toBe("[Article utile](https://example.test/article)");
+
+    const restored = markdownToDocument(documentToMarkdown(richDocument));
+    expect(restored.firstChild!.type.name).toBe("paragraph");
+    expect(restored.firstChild!.firstChild!.marks[0]!.type.name).toBe("link");
+    expect(restored.firstChild!.firstChild!.marks[0]!.attrs.href).toBe(url);
+  });
+
+  it("serializes a metadata-free Rich Card as its URL", () => {
+    const url = "https://example.test/no-metadata";
+    const richDocument = editorSchema.nodes.doc.create(null, [editorSchema.nodes.rich_link.create(fallbackRichLinkMetadata(url))]);
+    expect(documentToMarkdown(richDocument)).toBe(url);
+    expect(markdownToDocument(documentToMarkdown(richDocument)).textContent).toBe(url);
+  });
+
+  it("creates a Rich Card only when a single URL is pasted into an empty block", async () => {
+    const view = createEditorView(emptyDocument());
+    const url = "https://notion.so/example-page";
+    expect(handleSmartLinkPaste(view, createPasteEvent(url))).toBe(true);
+    expect(view.state.doc.firstChild!.type.name).toBe("rich_link");
+    expect(view.state.doc.firstChild!.attrs).toMatchObject({ url, domain: "notion.so" });
+    expect(await resolveLinkMetadata(url)).toEqual(fallbackRichLinkMetadata(url));
+    view.destroy();
+  });
+
+  it("pastes a URL into existing text as an inline link", () => {
+    const initial = editorSchema.nodes.doc.create(null, [editorSchema.nodes.paragraph.create(null, editorSchema.text("Avant "))]);
+    const view = createEditorView(initial, TextSelection.create(initial, 7));
+    const url = "https://example.test/guide";
+    expect(handleSmartLinkPaste(view, createPasteEvent(url))).toBe(true);
+    const inserted = view.state.doc.firstChild!.lastChild!;
+    expect(inserted.text).toBe(url);
+    expect(inserted.marks[0]!.attrs.href).toBe(url);
+    view.destroy();
+  });
+
+  it("turns selected text into a link instead of replacing it with a card", () => {
+    const initial = editorSchema.nodes.doc.create(null, [editorSchema.nodes.paragraph.create(null, editorSchema.text("Titre"))]);
+    const view = createEditorView(initial, TextSelection.create(initial, 1, 6));
+    const url = "https://github.com/example/project";
+    expect(handleSmartLinkPaste(view, createPasteEvent(url))).toBe(true);
+    expect(view.state.doc.textContent).toBe("Titre");
+    expect(view.state.doc.firstChild!.firstChild!.marks[0]!.attrs.href).toBe(url);
+    view.destroy();
   });
 
   it("round-trips nested lists and blockquotes", () => {
