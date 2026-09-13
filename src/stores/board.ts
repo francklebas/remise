@@ -4,6 +4,7 @@ import { computed, ref } from "vue";
 import type { Card, Column, TaskNotificationAction, Workspace } from "@/types/board";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { descriptionToPlainText, plainTextToDocument, documentToJSON } from "@/editor/document";
 
 export const useBoardStore = defineStore("board", () => {
   const auth = useAuthStore();
@@ -22,7 +23,7 @@ export const useBoardStore = defineStore("board", () => {
         {
           id: v4(),
           title: "Structurer la page d'accueil",
-          description: "Poser les bases de la nouvelle expérience.",
+          description: documentToJSON(plainTextToDocument("Poser les bases de la nouvelle expérience.")),
           createdAt: "2026-09-08",
           dueDate: "2026-09-18",
           dueTime: "17:00",
@@ -33,7 +34,7 @@ export const useBoardStore = defineStore("board", () => {
         {
           id: v4(),
           title: "Préparer les contenus",
-          description: "Rassembler les textes et visuels nécessaires.",
+          description: documentToJSON(plainTextToDocument("Rassembler les textes et visuels nécessaires.")),
           createdAt: "2026-09-09",
           dueDate: null,
           dueTime: null,
@@ -50,7 +51,7 @@ export const useBoardStore = defineStore("board", () => {
         {
           id: v4(),
           title: "Créer le système de design",
-          description: "Définir les couleurs, espacements et composants.",
+          description: documentToJSON(plainTextToDocument("Définir les couleurs, espacements et composants.")),
           createdAt: "2026-09-07",
           dueDate: "2026-09-15",
           dueTime: "12:00",
@@ -87,7 +88,7 @@ export const useBoardStore = defineStore("board", () => {
     const card: Card = {
       id: v4(),
       title: "Nouvelle tâche",
-      description: "",
+      description: documentToJSON(plainTextToDocument("")),
       createdAt: new Date().toISOString().slice(0, 10),
       dueDate: null,
       dueTime: null,
@@ -116,7 +117,7 @@ export const useBoardStore = defineStore("board", () => {
         task: {
           id: card.id,
           title: card.title,
-          description: card.description,
+          description: descriptionToPlainText(card.description),
           dueDate: card.dueDate,
           dueTime: card.dueTime,
           estimatedDuration: card.estimatedDuration,

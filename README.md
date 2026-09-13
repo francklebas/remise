@@ -20,6 +20,20 @@ Boardly is installable as a Progressive Web App. Open the production site in a s
 
 The application uses Vue 3, TypeScript, Vite, Pinia, Tailwind CSS, daisyUI, and Supabase.
 
+## Card content editor
+
+Card descriptions use a single canonical ProseMirror JSON document. Existing plain-text descriptions are converted to this shape at the data-read boundary; the store and components only manipulate the JSON document afterwards. The **Rich Text** and **Markdown** tabs are two views of that same document: switching to Markdown serializes the current document, while switching back parses the edited Markdown and atomically replaces the ProseMirror state.
+
+The schema supports paragraphs, headings, bold, italic, strike-through, links, inline code, blockquotes, ordered and unordered nested lists, and code blocks. A code block stores its language in `attrs.language`; aliases such as `sh` and `bash` are preserved exactly, including unknown languages. Code blocks use a fence longer than any backtick sequence in their content when serialized.
+
+Markdown images are represented directly by their `src`, `alt`, and optional `title`, without upload or URL transformation. Horizontal separators are intentionally rejected for now because the current document schema cannot represent them. The Markdown buffer remains intact and the editor stays in Markdown mode when that happens, so no content is silently discarded. Syntax highlighting is not included yet: code blocks are visually distinct and retain their language, leaving highlighting as a presentation-only future addition.
+
+Run the editor conversion tests with:
+
+```sh
+bun run test
+```
+
 ```sh
 bun install
 bun run supabase:start
@@ -46,6 +60,16 @@ Stop the local stack when it is no longer needed:
 ```sh
 bun run supabase:stop
 ```
+
+### End-to-end authentication test
+
+With the local Supabase/Mailpit stack running, execute the complete account-creation, email-confirmation, sign-out, and password-login flow with:
+
+```sh
+bun run test:e2e
+```
+
+The test starts the Vite development server automatically, creates a unique `@example.test` account, reads its confirmation message through the Mailpit API, follows the confirmation link, and verifies a subsequent password login. Chromium must be available at `/usr/bin/chromium`; set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to another executable when needed.
 
 ## Production builds
 

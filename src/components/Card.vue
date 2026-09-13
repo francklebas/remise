@@ -1,7 +1,9 @@
 <script lang="ts" setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { CalendarDays, MoreHorizontal, Trash2 } from "@lucide/vue";
 import type { Card, CardComplexity } from "@/types/board";
+import ContentEditor from "@/components/ContentEditor.vue";
+import { descriptionToPlainText, type CardDescription } from "@/editor/document";
 
 interface CardProps {
   card: Card;
@@ -21,12 +23,13 @@ const emit = defineEmits<{
 }>();
 
 const title = ref(props.card.title);
-const description = ref(props.card.description);
+const description = ref<CardDescription>(props.card.description);
 const dueDate = ref<string | null>(props.card.dueDate);
 const dueTime = ref<string | null>(props.card.dueTime);
 const estimatedDuration = ref<number | null>(props.card.estimatedDuration);
 const complexity = ref<CardComplexity>(props.card.complexity);
-const isEditing = ref(false);
+const editorDialog = ref<HTMLDialogElement>();
+const descriptionPreview = computed(() => descriptionToPlainText(props.card.description));
 
 function openEditor() {
   title.value = props.card.title;
@@ -35,11 +38,11 @@ function openEditor() {
   dueTime.value = props.card.dueTime;
   estimatedDuration.value = props.card.estimatedDuration;
   complexity.value = props.card.complexity;
-  isEditing.value = true;
+  editorDialog.value?.showModal();
 }
 
 function closeEditor() {
-  isEditing.value = false;
+  editorDialog.value?.close();
 }
 
 function save() {
@@ -47,7 +50,7 @@ function save() {
     id: props.card.id,
     patch: {
       title: title.value.trim() || "Nouvelle tâche",
-      description: description.value.trim(),
+      description: description.value,
       dueDate: dueDate.value || null,
       dueTime: dueDate.value ? dueTime.value || null : null,
       estimatedDuration: estimatedDuration.value && estimatedDuration.value > 0 ? estimatedDuration.value : null,
@@ -70,7 +73,7 @@ function save() {
           </ul>
         </div>
       </div>
-      <p class="min-h-8 whitespace-pre-line break-words text-xs leading-relaxed text-base-content/55">{{ props.card.description || "Ajouter une description" }}</p>
+      <p class="min-h-8 whitespace-pre-line break-words text-xs leading-relaxed text-base-content/55">{{ descriptionPreview || "Ajouter une description" }}</p>
       <div class="mt-1 flex items-center justify-between text-[11px] font-semibold text-base-content/35">
         <span class="rounded-md px-2 py-1" :class="{ 'bg-success/20 text-success-content': props.card.complexity === 'low', 'bg-warning/25 text-warning-content': props.card.complexity === 'medium', 'bg-error/20 text-error-content': props.card.complexity === 'high' }">{{ props.card.complexity === "low" ? "FAIBLE" : props.card.complexity === "high" ? "ÉLEVÉE" : "MOYENNE" }}</span>
         <span v-if="props.card.dueDate" class="flex items-center gap-1"><CalendarDays :size="13" />{{ props.card.dueDate }}<template v-if="props.card.dueTime"> · {{ props.card.dueTime }}</template></span>
@@ -78,23 +81,25 @@ function save() {
       </div>
     </div>
   </article>
-  <div v-if="isEditing" class="modal modal-open" role="dialog" aria-modal="true" aria-labelledby="card-editor-title" @click.self="closeEditor">
-    <div class="modal-box max-w-lg border border-base-300 bg-base-100 p-6 shadow-2xl">
+  <dialog ref="editorDialog" class="modal" aria-labelledby="card-editor-title">
+    <div class="modal-box w-11/12 max-w-5xl border border-base-300 bg-base-100 p-6 shadow-2xl">
       <div class="mb-5 flex items-start justify-between gap-4">
         <div>
           <p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Édition de la tâche</p>
           <h2 id="card-editor-title" class="mt-1 text-xl font-black">Modifier la carte</h2>
         </div>
-        <button class="btn btn-circle btn-ghost btn-sm" aria-label="Fermer" @click="closeEditor">×</button>
+        <form method="dialog">
+          <button class="btn btn-circle btn-ghost btn-sm" aria-label="Fermer">×</button>
+        </form>
       </div>
       <label class="form-control mb-4 w-full">
         <span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Titre</span>
         <input v-model="title" class="input input-bordered w-full font-semibold" autofocus @keyup.esc="closeEditor" @keyup.ctrl.enter="save" />
       </label>
-      <label class="form-control w-full">
+      <div class="form-control w-full">
         <span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Description</span>
-        <textarea v-model="description" class="textarea textarea-bordered min-h-32 w-full leading-relaxed" placeholder="Ajouter une description" @keyup.esc="closeEditor" />
-      </label>
+        <ContentEditor v-model="description" />
+      </div>
       <div class="mt-4 grid gap-4 sm:grid-cols-2">
         <label class="form-control w-full">
           <span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Date de création</span>
@@ -129,5 +134,8 @@ function save() {
         <button class="btn btn-primary" @click="save">Enregistrer</button>
       </div>
     </div>
-  </div>
+    <form method="dialog" class="modal-backdrop">
+      <button aria-label="Fermer l’éditeur">Fermer</button>
+    </form>
+  </dialog>
 </template>

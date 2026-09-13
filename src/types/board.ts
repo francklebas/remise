@@ -7,7 +7,7 @@ export interface Column {
 export interface Card {
   id: string;
   title: string;
-  description: string;
+  description: CardDescription;
   createdAt: string;
   dueDate: string | null;
   dueTime: string | null;
@@ -25,3 +25,4 @@ export interface Workspace {
   name: string;
   color: string;
 }
+import type { CardDescription } from "@/editor/document";

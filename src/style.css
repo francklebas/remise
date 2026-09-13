@@ -38,3 +38,61 @@
 :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; }
+
+.content-editor__rich {
+  min-height: 10rem;
+  cursor: text;
+}
+
+.content-editor__rich .ProseMirror {
+  min-height: 10rem;
+  padding: 0.75rem;
+  outline: none;
+}
+
+.content-editor__rich .ProseMirror > :first-child { margin-top: 0; }
+.content-editor__rich .ProseMirror > :last-child { margin-bottom: 0; }
+.content-editor__rich .ProseMirror p { margin: 0.5rem 0; }
+.content-editor__rich .ProseMirror h1,
+.content-editor__rich .ProseMirror h2,
+.content-editor__rich .ProseMirror h3 { margin: 0.75rem 0 0.4rem; font-weight: 800; }
+.content-editor__rich .ProseMirror h1 { font-size: 1.5rem; }
+.content-editor__rich .ProseMirror h2 { font-size: 1.25rem; }
+.content-editor__rich .ProseMirror h3 { font-size: 1.1rem; }
+.content-editor__rich .ProseMirror ul,
+.content-editor__rich .ProseMirror ol { margin: 0.5rem 0; padding-left: 1.5rem; }
+.content-editor__rich .ProseMirror blockquote { margin: 0.75rem 0; border-left: 3px solid oklch(85% 0.199 91.936); padding-left: 0.75rem; color: color-mix(in oklab, currentColor 65%, transparent); }
+.content-editor__rich .ProseMirror code { border-radius: 0.25rem; background: oklch(92% 0 0); padding: 0.08rem 0.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
+.content-editor__rich .ProseMirror pre {
+  position: relative;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  border-radius: 0.5rem;
+  background: oklch(20% 0 0);
+  padding: 2rem 0.9rem 0.9rem;
+  color: oklch(95% 0 0);
+  white-space: pre;
+}
+.content-editor__rich .ProseMirror pre code { background: transparent; padding: 0; color: inherit; }
+.content-editor__rich .ProseMirror img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.75rem 0;
+  border-radius: 0.5rem;
+  outline: 1px solid color-mix(in oklab, currentColor 15%, transparent);
+}
+.content-editor__rich .ProseMirror img.ProseMirror-selectednode { outline: 3px solid oklch(85% 0.199 91.936); }
+.content-editor__rich .ProseMirror pre[data-language]:not([data-language=""])::before {
+  content: attr(data-language);
+  position: absolute;
+  top: 0.5rem;
+  left: 0.75rem;
+  color: oklch(76% 0.177 163.223);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.content-editor__markdown { min-height: 14rem; resize: vertical; }
