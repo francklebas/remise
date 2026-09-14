@@ -20,11 +20,7 @@ async function authenticatedUser(request: Request, env: Env): Promise<User | nul
   const response = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
     headers: { Authorization: authorization, apikey: env.SUPABASE_ANON_KEY },
   });
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    console.warn("[media] Supabase auth failed", { status: response.status, body });
-    return null;
-  }
+  if (!response.ok) return null;
   return response.json<User>();
 }
 
@@ -89,7 +85,7 @@ export default {
       const key = decodeURIComponent(url.pathname.replace(/^\/api\/media\//, ""));
       if (!key.startsWith(`${user.id}/`)) return response(403, "Accès refusé.");
       await env.CARD_IMAGES.delete(key);
-      return new Response(null, { status: 204 });
+      return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "https://boardly.francklebas.com" } });
     }
     return response(404, "Route introuvable.");
   },
