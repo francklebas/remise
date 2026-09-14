@@ -1,9 +1,7 @@
 export type AppRoute = "/" | "/user" | "/reset-password";
 
 export function passwordResetRedirectTo(): string {
-  return import.meta.env.PROD
-    ? "https://boardly.francklebas.com/reset-password"
-    : "http://localhost:5173/reset-password";
+  return `${window.location.origin}/reset-password`;
 }
 
 export function currentRoute(): AppRoute {

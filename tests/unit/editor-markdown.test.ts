@@ -95,7 +95,7 @@ describe("ProseMirror editorial document", () => {
     const previousPath = window.location.pathname;
     window.history.replaceState({}, "", "/reset-password");
     expect(currentRoute()).toBe("/reset-password");
-    expect(passwordResetRedirectTo()).toMatch(/\/reset-password$/);
+    expect(passwordResetRedirectTo()).toBe(`${window.location.origin}/reset-password`);
     window.history.replaceState({}, "", previousPath);
   });
 
