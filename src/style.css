@@ -112,6 +112,13 @@ body { margin: 0; min-width: 320px; }
 .content-editor__rich .ProseMirror .remise-code-block .hljs-meta { color: color-mix(in oklab, var(--color-neutral-content) 58%, transparent); font-style: italic; }
 .content-editor__rich .ProseMirror .remise-code-block .hljs-title,
 .content-editor__rich .ProseMirror .remise-code-block .hljs-function { color: oklch(80% 0.14 230); }
+.content-editor__rich .ProseMirror .remise-image-view { position: relative; display: inline-block; max-width: 100%; vertical-align: middle; }
+.content-editor__rich .ProseMirror .remise-image { display: block; max-width: 100%; border-radius: 0.5rem; }
+.content-editor__rich .ProseMirror .remise-image-view[data-state="loading"] .remise-image { opacity: 0.55; }
+.content-editor__rich .ProseMirror .remise-image__status { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); border-radius: 0.375rem; background: color-mix(in oklab, var(--color-base-100) 88%, transparent); padding: 0.25rem 0.5rem; font-size: 0.75rem; white-space: nowrap; }
+.content-editor__rich .ProseMirror .remise-image__retry { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); display: none; }
+.content-editor__rich .ProseMirror .remise-image-view[data-state="error"] .remise-image__retry { display: block; }
+.content-editor__rich .ProseMirror .remise-image-view[data-state="error"] .remise-image__status { transform: translate(-50%, calc(-50% - 1.75rem)); }
 .content-editor__rich .ProseMirror img {
   display: block;
   max-width: 100%;

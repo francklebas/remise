@@ -50,7 +50,8 @@ export async function uploadImage(file: File, cardId: string) {
   form.set("file", file);
   form.set("cardId", cardId);
   form.set("extension", extensionFor(file.type));
-  const response = await fetch(import.meta.env.VITE_MEDIA_API_URL ?? "/api/media", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+  const mediaApi = import.meta.env.VITE_MEDIA_API_URL ?? (import.meta.env.PROD ? "https://media.boardly.francklebas.com/api/media" : "/api/media");
+  const response = await fetch(mediaApi, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
   if (!response.ok) throw new ImageUploadError((await response.json().catch(() => null))?.error ?? "Upload de l’image impossible.");
   return response.json() as Promise<{ storagePath: string; src: string }>;
 }

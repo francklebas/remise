@@ -333,7 +333,7 @@ onMounted(() => {
     transformPastedHTML: sanitizePastedHTML,
     handlePaste: handleEditorPaste,
     handleKeyDown: handleEditorKeyDown,
-    nodeViews: { code_block: createCodeBlockNodeView(), image: createImageNodeView() },
+    nodeViews: { code_block: createCodeBlockNodeView(), image: createImageNodeView((src) => void retryFailedImage(src)) },
   });
   updateEditorUI();
   window.addEventListener("resize", updateEditorUI);

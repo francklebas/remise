@@ -5,6 +5,7 @@ export interface Env {
 }
 
 type User = { id: string };
+const MEDIA_ORIGIN = "https://media.boardly.francklebas.com";
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MIME_EXTENSIONS: Record<string, Set<string>> = {
   "image/jpeg": new Set(["jpg", "jpeg"]),
@@ -19,7 +20,12 @@ async function authenticatedUser(request: Request, env: Env): Promise<User | nul
   const response = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
     headers: { Authorization: authorization, apikey: env.SUPABASE_ANON_KEY },
   });
-  return response.ok ? response.json<User>() : null;
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    console.warn("[media] Supabase auth failed", { status: response.status, body });
+    return null;
+  }
+  return response.json<User>();
 }
 
 async function cardBelongsToUser(cardId: string, request: Request, env: Env): Promise<boolean> {
@@ -35,7 +41,7 @@ async function cardBelongsToUser(cardId: string, request: Request, env: Env): Pr
 }
 
 function response(status: number, message: string) {
-  return Response.json({ error: message }, { status });
+  return Response.json({ error: message }, { status, headers: { "Access-Control-Allow-Origin": "https://boardly.francklebas.com" } });
 }
 
 function mediaPath(url: URL) {
@@ -45,6 +51,7 @@ function mediaPath(url: URL) {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "https://boardly.francklebas.com", "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS" } });
     const user = await authenticatedUser(request, env);
     if (!user) return response(401, "Authentification requise.");
 
@@ -63,7 +70,7 @@ export default {
       if (!MIME_EXTENSIONS[mime].has(extension.toLowerCase())) return response(400, "Extension et type MIME incohérents.");
       const key = `${user.id}/${cardId}/${crypto.randomUUID()}.${extension}`;
       await env.CARD_IMAGES.put(key, file.stream(), { httpMetadata: { contentType: file.type, cacheControl: "private, max-age=31536000, immutable" } });
-      return Response.json({ storagePath: key, src: `/media/${encodeURIComponent(key).replace(/%2F/g, "/")}` }, { status: 201 });
+      return Response.json({ storagePath: key, src: `${MEDIA_ORIGIN}/media/${encodeURIComponent(key).replace(/%2F/g, "/")}` }, { status: 201, headers: { "Access-Control-Allow-Origin": "https://boardly.francklebas.com" } });
     }
 
     if (request.method === "GET" && url.pathname.startsWith("/media/")) {
@@ -74,6 +81,7 @@ export default {
       const headers = new Headers();
       object.writeHttpMetadata(headers);
       headers.set("ETag", object.httpEtag);
+      headers.set("Access-Control-Allow-Origin", "https://boardly.francklebas.com");
       return new Response(object.body, { headers });
     }
 

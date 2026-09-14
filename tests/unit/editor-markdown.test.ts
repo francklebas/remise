@@ -17,6 +17,7 @@ import { detectDocumentFormat, DocumentImportError, importDocumentFile, insertIm
 import { codeHighlightPluginKey, highlightCode, resolveHighlightLanguage } from "@/editor/code-highlight";
 import { copyCodeBlockText } from "@/editor/code-block-view";
 import { MAX_IMAGE_BYTES, ImageUploadError, prepareImage } from "@/editor/media";
+import { currentRoute, passwordResetRedirectTo } from "@/router";
 
 function roundTripMarkdown(markdown: string) {
   return markdownToDocument(documentToMarkdown(markdownToDocument(markdown)));
@@ -90,6 +91,14 @@ async function createDocxWithEmbeddedImage(alt: string): Promise<File> {
 }
 
 describe("ProseMirror editorial document", () => {
+  it("exposes the password reset route and environment-specific redirect", () => {
+    const previousPath = window.location.pathname;
+    window.history.replaceState({}, "", "/reset-password");
+    expect(currentRoute()).toBe("/reset-password");
+    expect(passwordResetRedirectTo()).toMatch(/\/reset-password$/);
+    window.history.replaceState({}, "", previousPath);
+  });
+
   it("validates local image inputs before decoding or uploading", async () => {
     await expect(prepareImage(new File(["<svg></svg>"], "diagram.svg", { type: "image/svg+xml" }))).rejects.toBeInstanceOf(ImageUploadError);
     await expect(prepareImage(new File([new Uint8Array(MAX_IMAGE_BYTES + 1)], "huge.png", { type: "image/png" }))).rejects.toMatchObject({ message: expect.stringContaining("20 Mo") });

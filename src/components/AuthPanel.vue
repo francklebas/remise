@@ -2,12 +2,17 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { ArrowRight, Mail } from "@lucide/vue";
 import { useAuthStore } from "@/stores/auth";
+import { supabase } from "@/lib/supabase";
+import { navigate, passwordResetRedirectTo } from "@/router";
 
 const auth = useAuthStore();
 const mode = ref<"signIn" | "signUp">("signIn");
 const email = ref("");
 const password = ref("");
 const isSending = ref(false);
+const isForgotPassword = ref(false);
+const forgotSent = ref(false);
+const forgotError = ref<string | null>(null);
 const captchaToken = ref("");
 const captchaError = ref<string | null>(null);
 const turnstileContainer = ref<HTMLElement | null>(null);
@@ -75,6 +80,17 @@ onBeforeUnmount(() => {
 });
 
 async function submit() {
+  if (isForgotPassword.value) {
+    if (!email.value.trim() || !supabase) return;
+    isSending.value = true;
+    forgotError.value = null;
+    forgotSent.value = false;
+    const { error } = await supabase.auth.resetPasswordForEmail(email.value.trim(), { redirectTo: passwordResetRedirectTo() });
+    if (error) forgotError.value = error.message;
+    else forgotSent.value = true;
+    isSending.value = false;
+    return;
+  }
   if (!email.value.trim() || !password.value) return;
   if (turnstileSiteKey && !captchaToken.value) {
     captchaError.value =
@@ -99,6 +115,13 @@ async function submit() {
     window.turnstile?.reset(turnstileWidgetId);
     captchaToken.value = "";
   }
+}
+
+function showLogin() {
+  isForgotPassword.value = false;
+  forgotSent.value = false;
+  forgotError.value = null;
+  navigate("/");
 }
 </script>
 
@@ -131,7 +154,7 @@ async function submit() {
       <p class="mt-3 max-w-sm text-sm leading-relaxed text-base-content/60">
         Connectez-vous avec votre adresse e-mail et votre mot de passe.
       </p>
-      <div role="tablist" class="tabs tabs-box mt-6 grid grid-cols-2">
+      <div v-if="!isForgotPassword" role="tablist" class="tabs tabs-box mt-6 grid grid-cols-2">
         <button
           type="button"
           role="tab"
@@ -152,7 +175,7 @@ async function submit() {
         </button>
       </div>
       <form class="mt-7 flex flex-col gap-5" @submit.prevent="submit">
-        <label class="form-control w-full">
+        <label v-if="!isForgotPassword" class="form-control w-full">
           <span
             class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55"
             >Adresse e-mail</span
@@ -183,7 +206,7 @@ async function submit() {
             class="input input-bordered w-full"
           />
         </label>
-        <div
+        <div v-if="!isForgotPassword"
           ref="turnstileContainer"
           class="flex min-h-[65px] justify-start overflow-hidden"
           aria-label="Contrôle anti-robot"
@@ -200,11 +223,13 @@ async function submit() {
             class="loading loading-spinner loading-sm"
           ></span>
           <template v-else>
-            {{ mode === "signIn" ? "Se connecter" : "Créer mon compte" }}
+            {{ isForgotPassword ? "Envoyer le lien" : mode === "signIn" ? "Se connecter" : "Créer mon compte" }}
             <ArrowRight :size="17" />
           </template>
         </button>
       </form>
+      <button v-if="mode === 'signIn' && !isForgotPassword" class="link link-primary mt-4 text-sm" type="button" @click="isForgotPassword = true; forgotError = null; forgotSent = false">Mot de passe oublié ?</button>
+      <button v-if="isForgotPassword" class="link link-primary mt-4 text-sm" type="button" @click="showLogin">Retour à la connexion</button>
       <div
         v-if="auth.confirmationSent"
         class="alert alert-success mt-6 text-sm leading-relaxed"
@@ -212,6 +237,8 @@ async function submit() {
         Votre compte a été créé. Consultez votre messagerie pour confirmer votre
         adresse, puis connectez-vous avec votre mot de passe.
       </div>
+      <div v-if="forgotSent" class="alert alert-success mt-6 text-sm leading-relaxed">Si cette adresse existe, un lien de réinitialisation vient d’être envoyé.</div>
+      <div v-if="forgotError" class="alert alert-error mt-6 text-sm leading-relaxed">{{ forgotError }}</div>
       <div
         v-if="auth.error"
         class="alert alert-error mt-6 text-sm leading-relaxed"
