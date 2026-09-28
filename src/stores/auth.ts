@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { applyTheme, normalizeThemePreference, type ThemePreference } from "@/theme";
 
 export const useAuthStore = defineStore("auth", () => {
   const session = ref<Session | null>(null);
@@ -9,7 +10,10 @@ export const useAuthStore = defineStore("auth", () => {
   const error = ref<string | null>(null);
   const confirmationSent = ref(false);
   const notificationsEnabled = ref(false);
+  const themePreference = ref<ThemePreference>("system");
   let unsubscribe: (() => void) | undefined;
+  let systemThemeQuery: MediaQueryList | undefined;
+  let onSystemThemeChange: (() => void) | undefined;
 
   async function initialize() {
     if (!supabase) {
@@ -22,6 +26,15 @@ export const useAuthStore = defineStore("auth", () => {
     notificationsEnabled.value = Boolean(
       data.session?.user.user_metadata.notifications_enabled,
     );
+    themePreference.value = normalizeThemePreference(
+      data.session?.user.user_metadata.theme_preference,
+    );
+    applyTheme(themePreference.value);
+    systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    onSystemThemeChange = () => {
+      if (themePreference.value === "system") applyTheme("system");
+    };
+    systemThemeQuery.addEventListener("change", onSystemThemeChange);
     error.value = sessionError?.message ?? null;
     isLoading.value = false;
 
@@ -31,6 +44,10 @@ export const useAuthStore = defineStore("auth", () => {
         notificationsEnabled.value = Boolean(
           nextSession?.user.user_metadata.notifications_enabled,
         );
+        themePreference.value = normalizeThemePreference(
+          nextSession?.user.user_metadata.theme_preference,
+        );
+        applyTheme(themePreference.value);
         isLoading.value = false;
       },
     );
@@ -96,8 +113,28 @@ export const useAuthStore = defineStore("auth", () => {
     }
   }
 
+  async function setThemePreference(preference: ThemePreference) {
+    const previousValue = themePreference.value;
+    themePreference.value = preference;
+    applyTheme(preference);
+    if (!supabase || !session.value) return;
+    const { data, error: updateError } = await supabase.auth.updateUser({
+      data: { theme_preference: preference },
+    });
+    if (updateError) {
+      themePreference.value = previousValue;
+      applyTheme(previousValue);
+      error.value = updateError.message;
+    } else if (data.user) {
+      session.value = { ...session.value, user: data.user };
+      error.value = null;
+    }
+  }
+
   function dispose() {
     unsubscribe?.();
+    if (systemThemeQuery && onSystemThemeChange)
+      systemThemeQuery.removeEventListener("change", onSystemThemeChange);
   }
 
   return {
@@ -106,10 +143,12 @@ export const useAuthStore = defineStore("auth", () => {
     error,
     confirmationSent,
     notificationsEnabled,
+    themePreference,
     initialize,
     signInWithPassword,
     signUp,
     setNotificationsEnabled,
+    setThemePreference,
     signOut,
     dispose,
   };

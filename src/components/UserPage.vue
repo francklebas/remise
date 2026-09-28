@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { ref } from "vue";
-import { ArrowLeft, Check, Settings, UserRound } from "@lucide/vue";
+import { ArrowLeft, Settings, UserRound } from "@lucide/vue";
 import { navigate } from "@/router";
 import { useAuthStore } from "@/stores/auth";
 
@@ -55,7 +55,8 @@ function goBack() {
     </section>
     <section v-else class="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm">
       <div class="mb-6 flex items-center gap-4"><div class="grid size-12 place-items-center rounded-xl bg-base-200"><Settings :size="21" /></div><div><h2 class="font-black">Configuration de l’application</h2><p class="text-sm text-base-content/55">Les préférences de Boardly seront disponibles ici.</p></div></div>
-      <div class="flex items-center justify-between rounded-xl border border-base-300 p-4"><div><p class="font-semibold">Thème de l’application</p><p class="text-sm text-base-content/55">Bumblebee</p></div><span class="badge badge-success gap-1"><Check :size="13" /> Actif</span></div>
+      <div class="flex flex-col gap-3 rounded-xl border border-base-300 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p class="font-semibold">Thème de l’application</p><p class="text-sm text-base-content/55">Choisissez le thème utilisé par Boardly.</p></div><select :value="auth.themePreference" class="select select-bordered w-full sm:w-56" aria-label="Thème de l’application" @change="auth.setThemePreference(($event.target as HTMLSelectElement).value as 'dark' | 'light' | 'system')"><option value="system">Système</option><option value="light">Clair</option><option value="dark">Sombre</option></select></div>
+      <div v-if="auth.error" class="alert alert-error mt-4 text-sm">{{ auth.error }}</div>
     </section>
   </main>
 </template>
