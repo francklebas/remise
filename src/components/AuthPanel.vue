@@ -237,6 +237,7 @@ function showLogin() {
         Votre compte a été créé. Consultez votre messagerie pour confirmer votre
         adresse, puis connectez-vous avec votre mot de passe.
       </div>
+      <div v-if="auth.accountDeleted" role="status" class="alert alert-success mt-6 text-sm leading-relaxed">Votre compte et toutes vos données ont été supprimés.</div>
       <div v-if="forgotSent" class="alert alert-success mt-6 text-sm leading-relaxed">Si cette adresse existe, un lien de réinitialisation vient d’être envoyé.</div>
       <div v-if="forgotError" class="alert alert-error mt-6 text-sm leading-relaxed">{{ forgotError }}</div>
       <div

@@ -11,6 +11,23 @@ const auth = useAuthStore();
 const board = useBoardStore();
 const activeTab = ref<UserTab>("profile");
 
+const isDeletingAccount = ref(false);
+const deletePassword = ref("");
+const isDeleting = ref(false);
+
+function cancelAccountDeletion() {
+  isDeletingAccount.value = false;
+  deletePassword.value = "";
+  auth.error = null;
+}
+
+async function deleteAccount() {
+  isDeleting.value = true;
+  const deleted = await auth.deleteAccount(deletePassword.value);
+  isDeleting.value = false;
+  if (deleted) navigate("/");
+}
+
 function goBack() {
   navigate(board.activeBoardId ? boardPath(board.activeBoardId) : "/");
 }
@@ -47,6 +64,22 @@ function goBack() {
           <div class="rounded-xl bg-base-200 p-4"><p class="text-xs font-bold uppercase tracking-wide text-base-content/45">Adresse e-mail</p><p class="mt-2 break-all font-semibold">{{ auth.session?.user.email }}</p></div>
           <div class="rounded-xl bg-base-200 p-4"><p class="text-xs font-bold uppercase tracking-wide text-base-content/45">Identifiant client</p><p class="mt-2 break-all font-mono text-xs font-semibold">{{ auth.session?.user.id }}</p></div>
         </div>
+      </div>
+      <div class="rounded-2xl border border-error/40 bg-base-100 p-6 shadow-sm">
+        <h2 class="font-black text-error">Supprimer mon compte</h2>
+        <p class="mt-1 text-sm text-base-content/65">Votre compte, vos espaces, boards, cartes et images seront supprimés définitivement. Cette action est irréversible.</p>
+        <button v-if="!isDeletingAccount" class="btn btn-outline btn-error btn-sm mt-4" @click="isDeletingAccount = true">Supprimer mon compte…</button>
+        <form v-else class="mt-4 space-y-3" @submit.prevent="deleteAccount">
+          <label class="block">
+            <span class="mb-1 block text-sm font-semibold">Confirmez avec votre mot de passe</span>
+            <input v-model="deletePassword" type="password" autocomplete="current-password" class="input input-bordered w-full max-w-sm" aria-label="Mot de passe pour confirmer la suppression" required />
+          </label>
+          <div v-if="auth.error" role="alert" class="alert alert-error max-w-sm py-2 text-sm">{{ auth.error }}</div>
+          <div class="flex gap-2">
+            <button type="button" class="btn btn-ghost btn-sm" @click="cancelAccountDeletion">Annuler</button>
+            <button type="submit" class="btn btn-error btn-sm" :disabled="!deletePassword || isDeleting"><span v-if="isDeleting" class="loading loading-spinner loading-xs" />Supprimer définitivement</button>
+          </div>
+        </form>
       </div>
     </section>
 

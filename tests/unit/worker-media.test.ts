@@ -44,4 +44,23 @@ describe("media worker upload guards", () => {
     expect((await worker.fetch(request(new File([new Uint8Array(20 * 1024 * 1024 + 1)], "a.png", { type: "image/png" })), env)).status).toBe(413);
     expect((await worker.fetch(request(new File(["x"], "a.jpg", { type: "image/png" }), cardId, "jpg"), env)).status).toBe(400);
   });
+
+  it("purges only the authenticated user's images, page by page", async () => {
+    const list = vi.fn()
+      .mockResolvedValueOnce({ objects: [{ key: `${userId}/a.png` }, { key: `${userId}/b.png` }], truncated: true, cursor: "next" })
+      .mockResolvedValueOnce({ objects: [{ key: `${userId}/c.png` }], truncated: false });
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const purgeEnv = { CARD_IMAGES: { list, delete: remove }, SUPABASE_URL: "https://supabase.test", SUPABASE_ANON_KEY: "anon" } as never;
+    const result = await worker.fetch(new Request("https://boardly.test/api/media", { method: "DELETE", headers: { Authorization: "Bearer token" } }), purgeEnv);
+    expect(result.status).toBe(204);
+    expect(list).toHaveBeenNthCalledWith(1, { prefix: `${userId}/`, cursor: undefined });
+    expect(list).toHaveBeenNthCalledWith(2, { prefix: `${userId}/`, cursor: "next" });
+    expect(remove).toHaveBeenCalledWith([`${userId}/a.png`, `${userId}/b.png`]);
+    expect(remove).toHaveBeenCalledWith([`${userId}/c.png`]);
+  });
+
+  it("refuses to purge without authentication", async () => {
+    const result = await worker.fetch(new Request("https://boardly.test/api/media", { method: "DELETE" }), env);
+    expect(result.status).toBe(401);
+  });
 });
