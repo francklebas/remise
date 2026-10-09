@@ -1,4 +1,6 @@
-export type AppRoute = "/" | "/user" | "/reset-password";
+import { isLegalRoute, type LegalRoute } from "@/legal";
+
+export type AppRoute = "/" | "/user" | "/reset-password" | LegalRoute;
 
 const boardPathPattern = /^\/b\/([0-9a-f-]{36})\/?$/i;
 
@@ -9,6 +11,7 @@ export function passwordResetRedirectTo(): string {
 export function currentRoute(): AppRoute {
   if (window.location.pathname === "/user") return "/user";
   if (window.location.pathname === "/reset-password") return "/reset-password";
+  if (isLegalRoute(window.location.pathname)) return window.location.pathname;
   return "/";
 }
 

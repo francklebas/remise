@@ -5,6 +5,9 @@ import Header from "@/components/Header.vue";
 import AuthPanel from "@/components/AuthPanel.vue";
 import UserPage from "@/components/UserPage.vue";
 import ResetPassword from "@/components/ResetPassword.vue";
+import LegalPage from "@/components/LegalPage.vue";
+import AppFooter from "@/components/AppFooter.vue";
+import { isLegalRoute } from "@/legal";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { currentRoute, type AppRoute } from "@/router";
 import { useAuthStore } from "@/stores/auth";
@@ -27,6 +30,7 @@ onUnmounted(() => {
   <div v-if="!isSupabaseConfigured" class="grid min-h-screen place-items-center bg-base-200 px-5 text-center">
     <div class="alert alert-warning max-w-xl">Supabase n’est pas configuré. Copiez `.env.example` vers `.env.local`, puis renseignez `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`.</div>
   </div>
+  <LegalPage v-else-if="isLegalRoute(route)" :route="route" />
   <ResetPassword v-else-if="route === '/reset-password'" />
   <div v-else-if="auth.isLoading" class="grid min-h-screen place-items-center bg-base-200"><span class="loading loading-spinner loading-lg text-primary"></span></div>
   <AuthPanel v-else-if="!auth.session" />
@@ -36,5 +40,6 @@ onUnmounted(() => {
       <Board />
     </main>
     <UserPage v-else />
+    <AppFooter />
   </div>
 </template>
