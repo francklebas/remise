@@ -24,8 +24,8 @@ test("a user can confirm an account and sign in with a password", async ({
   request,
 }) => {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const email = `boardly-${suffix}@example.test`;
-  const password = `Boardly-${suffix}!`;
+  const email = `remise-${suffix}@example.test`;
+  const password = `Remise-${suffix}!`;
 
   await page.goto("/");
   await page.getByRole("tab", { name: "Créer un compte" }).click();

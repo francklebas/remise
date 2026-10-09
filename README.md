@@ -1,6 +1,6 @@
-# Boardly
+# Remise
 
-Boardly is a lightweight Kanban workspace for organizing tasks visually. A workspace can contain several boards, and each board is made of reusable columns and cards. Cards can be edited from their modal, reordered, moved between columns, and enriched with a due date, estimated duration, complexity, and description.
+Remise is a lightweight Kanban workspace for organizing tasks visually. A workspace can contain several boards, and each board is made of reusable columns and cards. Cards can be edited from their modal, reordered, moved between columns, and enriched with a due date, estimated duration, complexity, and description.
 
 ## Using the app
 
@@ -10,11 +10,11 @@ Boardly is a lightweight Kanban workspace for organizing tasks visually. A works
 4. Double-click a card to edit its details in the modal.
 5. Use the user menu to manage account data and notification preferences.
 
-When task notifications are enabled, Boardly sends an email containing the task details and a direct link to the card.
+When task notifications are enabled, Remise sends an email containing the task details and a direct link to the card.
 
 ## Progressive Web App
 
-Boardly is installable as a Progressive Web App. Open the production site in a supported browser and choose **Install Boardly** from the browser menu. The service worker caches the application shell so the interface can open during a temporary network interruption; Supabase data still requires a connection.
+Remise is installable as a Progressive Web App. Open the production site in a supported browser and choose **Install Remise** from the browser menu. The service worker caches the application shell so the interface can open during a temporary network interruption; Supabase data still requires a connection.
 
 ## Local development
 
@@ -97,7 +97,7 @@ All `*.local` files are ignored by Git. Never expose private keys through a vari
 Notifications are sent by the `send-task-notification` Supabase Edge Function. Resend credentials must be configured as Supabase secrets, not browser environment variables:
 
 ```sh
-supabase secrets set RESEND_API_KEY="$RESEND_API_KEY" RESEND_FROM_EMAIL="Boardly <notifications@your-verified-domain.example>" APP_URL="https://boardly.francklebas.com"
+supabase secrets set RESEND_API_KEY="$RESEND_API_KEY" RESEND_FROM_EMAIL="Remise <notifications@your-verified-domain.example>" APP_URL="https://boardly.francklebas.com"
 supabase functions deploy send-task-notification
 ```
 

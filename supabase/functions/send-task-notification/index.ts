@@ -44,10 +44,10 @@ Deno.serve(async (request) => {
       method: "POST",
       headers: { Authorization: `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: Deno.env.get("RESEND_FROM_EMAIL") ?? "Boardly <onboarding@resend.dev>",
+        from: Deno.env.get("RESEND_FROM_EMAIL") ?? "Remise <onboarding@resend.dev>",
         to: [user.email],
         subject,
-        html: `<h2>${htmlEscape(subject)}</h2><p>${htmlEscape(task.description || "Aucune description")}</p><p>${details}</p><p><a href="${appUrl}">Ouvrir la tâche dans Boardly</a></p>`,
+        html: `<h2>${htmlEscape(subject)}</h2><p>${htmlEscape(task.description || "Aucune description")}</p><p>${details}</p><p><a href="${appUrl}">Ouvrir la tâche dans Remise</a></p>`,
       }),
     });
     if (!resendResponse.ok) return new Response(JSON.stringify({ error: await resendResponse.text() }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });

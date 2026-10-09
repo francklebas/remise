@@ -12,7 +12,7 @@ app.mount("#app");
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").catch((error: unknown) => {
-      console.warn("Boardly service worker registration failed", error);
+      console.warn("Remise service worker registration failed", error);
     });
   });
 } else if (import.meta.env.DEV && "serviceWorker" in navigator) {

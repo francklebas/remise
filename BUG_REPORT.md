@@ -1,6 +1,6 @@
 # Bug report guide
 
-Use this template when reporting a problem in Boardly. A precise report makes the issue reproducible and easier to fix.
+Use this template when reporting a problem in Remise. A precise report makes the issue reproducible and easier to fix.
 
 ## Title
 
@@ -38,4 +38,4 @@ Describe the correct behavior in one or two sentences.
 
 ## Actual result
 
-Describe what Boardly did instead, including any data that was lost or changed.
+Describe what Remise did instead, including any data that was lost or changed.
