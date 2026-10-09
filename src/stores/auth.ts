@@ -9,6 +9,7 @@ export const useAuthStore = defineStore("auth", () => {
   const isLoading = ref(true);
   const error = ref<string | null>(null);
   const confirmationSent = ref(false);
+  const accountDeleted = ref(false);
   const notificationsEnabled = ref(false);
   const themePreference = ref<ThemePreference>("system");
   let unsubscribe: (() => void) | undefined;
@@ -98,6 +99,24 @@ export const useAuthStore = defineStore("auth", () => {
     if (signOutError) error.value = signOutError.message;
   }
 
+  async function deleteAccount(password: string) {
+    if (!supabase || !session.value) return false;
+    const { data, error: invokeError } = await supabase.functions.invoke("delete-account", { body: { password } });
+    if (invokeError) {
+      const details = await (invokeError as { context?: Response }).context?.json?.().catch(() => null);
+      error.value = details?.error ?? "Suppression du compte impossible.";
+      return false;
+    }
+    if (!(data as { deleted?: boolean } | null)?.deleted) {
+      error.value = "Suppression du compte impossible.";
+      return false;
+    }
+    error.value = null;
+    accountDeleted.value = true;
+    await supabase.auth.signOut({ scope: "local" });
+    return true;
+  }
+
   async function setNotificationsEnabled(enabled: boolean) {
     if (!supabase || !session.value) return;
     const previousValue = notificationsEnabled.value;
@@ -142,6 +161,7 @@ export const useAuthStore = defineStore("auth", () => {
     isLoading,
     error,
     confirmationSent,
+    accountDeleted,
     notificationsEnabled,
     themePreference,
     initialize,
@@ -150,6 +170,7 @@ export const useAuthStore = defineStore("auth", () => {
     setNotificationsEnabled,
     setThemePreference,
     signOut,
+    deleteAccount,
     dispose,
   };
 });

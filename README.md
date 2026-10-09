@@ -102,3 +102,14 @@ supabase functions deploy send-task-notification
 ```
 
 The sender domain must be verified in Resend, and Supabase Auth must have Turnstile enabled with its private secret key.
+
+## Account deletion
+
+Users can delete their account from their user page after confirming their password. The `delete-account` Edge Function purges the user's images through the media worker (`DELETE /api/media`), deletes the Auth user (workspaces, boards, columns and cards cascade), then sends a confirmation email through Resend when it is configured:
+
+```sh
+supabase secrets set MEDIA_API_URL="https://media.boardly.francklebas.com/api/media"
+supabase functions deploy delete-account
+```
+
+Deploy the media worker first so the purge route exists. Without `MEDIA_API_URL` (local development) images are not purged.

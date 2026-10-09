@@ -81,6 +81,17 @@ export default {
       return new Response(object.body, { headers });
     }
 
+    if (request.method === "DELETE" && url.pathname === "/api/media") {
+      // Account deletion: purge every image stored under the user's prefix.
+      let cursor: string | undefined;
+      do {
+        const page = await env.CARD_IMAGES.list({ prefix: `${user.id}/`, cursor });
+        if (page.objects.length) await env.CARD_IMAGES.delete(page.objects.map((object) => object.key));
+        cursor = page.truncated ? page.cursor : undefined;
+      } while (cursor);
+      return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "https://boardly.francklebas.com" } });
+    }
+
     if (request.method === "DELETE" && url.pathname.startsWith("/api/media/")) {
       const key = decodeURIComponent(url.pathname.replace(/^\/api\/media\//, ""));
       if (!key.startsWith(`${user.id}/`)) return response(403, "Accès refusé.");
