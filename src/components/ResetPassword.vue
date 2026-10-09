@@ -31,7 +31,7 @@ async function backToLogin() {
 <template>
   <main class="grid min-h-screen place-items-center bg-base-200 px-5 py-8">
     <section class="w-full max-w-md rounded-3xl border border-base-300 bg-base-100 p-8 shadow-xl">
-      <div class="mb-7 flex items-center gap-3"><div class="grid size-11 place-items-center rounded-xl bg-primary text-primary-content"><KeyRound :size="21" /></div><p class="text-xl font-black">Boardly</p></div>
+      <div class="mb-7 flex items-center gap-3"><div class="grid size-11 place-items-center rounded-xl bg-primary text-primary-content"><KeyRound :size="21" /></div><p class="text-xl font-black">Remise</p></div>
       <h1 class="text-3xl font-black tracking-tight">Nouveau mot de passe</h1>
       <form v-if="!completed" class="mt-7 flex flex-col gap-5" @submit.prevent="submit">
         <label class="form-control"><span class="label-text mb-2 text-xs font-bold uppercase tracking-wide text-base-content/55">Nouveau mot de passe</span><input v-model="password" required minlength="8" type="password" autocomplete="new-password" class="input input-bordered w-full" /></label>

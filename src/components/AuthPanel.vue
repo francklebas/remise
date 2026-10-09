@@ -137,7 +137,7 @@ function showLogin() {
           <Mail :size="21" />
         </div>
         <div>
-          <p class="text-xl font-black">Boardly</p>
+          <p class="text-xl font-black">Remise</p>
           <p class="text-xs text-base-content/50">
             Vos boards, au même endroit
           </p>

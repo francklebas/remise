@@ -1,4 +1,4 @@
-const CACHE_NAME = "boardly-shell-v1";
+const CACHE_NAME = "remise-shell-v1";
 const APP_SHELL = ["/", "/index.html", "/manifest.webmanifest", "/favicon.svg"];
 
 self.addEventListener("install", (event) => {
