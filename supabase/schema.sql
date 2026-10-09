@@ -1,28 +1,92 @@
-create table public.boards (
+create table public.workspaces (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id) on delete cascade,
+  name text not null default 'Personnel' check (length(trim(name)) > 0),
+  color text not null default 'primary',
+  created_at timestamptz not null default now()
+);
+
+create index workspaces_owner_idx on public.workspaces (owner_id, created_at);
+
+alter table public.workspaces enable row level security;
+
+create policy "Clients can read their workspaces"
+  on public.workspaces for select
+  using (auth.uid() = owner_id);
+
+create policy "Clients can create their workspaces"
+  on public.workspaces for insert
+  with check (auth.uid() = owner_id);
+
+create policy "Clients can update their workspaces"
+  on public.workspaces for update
+  using (auth.uid() = owner_id)
+  with check (auth.uid() = owner_id);
+
+create policy "Clients can delete their workspaces"
+  on public.workspaces for delete
+  using (auth.uid() = owner_id);
+
+-- Single place deciding who can reach a workspace; membership will extend it.
+create function public.can_access_workspace(target_workspace_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.workspaces
+    where workspaces.id = target_workspace_id and workspaces.owner_id = auth.uid()
+  );
+$$;
+
+revoke execute on function public.can_access_workspace(uuid) from public, anon;
+grant execute on function public.can_access_workspace(uuid) to authenticated;
+
+create table public.boards (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
   name text not null default 'Mon espace de travail',
   created_at timestamptz not null default now()
 );
 
+create index boards_workspace_created_idx on public.boards (workspace_id, created_at);
+
 alter table public.boards enable row level security;
 
-create policy "Clients can read their boards"
+create function public.can_access_board(target_board_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.boards
+    where boards.id = target_board_id and public.can_access_workspace(boards.workspace_id)
+  );
+$$;
+
+revoke execute on function public.can_access_board(uuid) from public, anon;
+grant execute on function public.can_access_board(uuid) to authenticated;
+
+create policy "Members can read workspace boards"
   on public.boards for select
-  using (auth.uid() = owner_id);
+  using (public.can_access_workspace(workspace_id));
 
-create policy "Clients can create their boards"
+create policy "Members can create workspace boards"
   on public.boards for insert
-  with check (auth.uid() = owner_id);
+  with check (public.can_access_workspace(workspace_id));
 
-create policy "Clients can update their boards"
+create policy "Members can update workspace boards"
   on public.boards for update
-  using (auth.uid() = owner_id)
-  with check (auth.uid() = owner_id);
+  using (public.can_access_workspace(workspace_id))
+  with check (public.can_access_workspace(workspace_id));
 
-create policy "Clients can delete their boards"
+create policy "Members can delete workspace boards"
   on public.boards for delete
-  using (auth.uid() = owner_id);
+  using (public.can_access_workspace(workspace_id));
 
 create table public.cards (
   id uuid primary key default gen_random_uuid(),
@@ -57,22 +121,22 @@ for each row execute function public.set_cards_updated_at();
 
 alter table public.cards enable row level security;
 
-create policy "Clients can read cards from their boards"
+create policy "Members can read board cards"
   on public.cards for select
-  using (exists (select 1 from public.boards where boards.id = cards.board_id and boards.owner_id = auth.uid()));
+  using (public.can_access_board(board_id));
 
-create policy "Clients can create cards in their boards"
+create policy "Members can create board cards"
   on public.cards for insert
-  with check (exists (select 1 from public.boards where boards.id = cards.board_id and boards.owner_id = auth.uid()));
+  with check (public.can_access_board(board_id));
 
-create policy "Clients can update cards from their boards"
+create policy "Members can update board cards"
   on public.cards for update
-  using (exists (select 1 from public.boards where boards.id = cards.board_id and boards.owner_id = auth.uid()))
-  with check (exists (select 1 from public.boards where boards.id = cards.board_id and boards.owner_id = auth.uid()));
+  using (public.can_access_board(board_id))
+  with check (public.can_access_board(board_id));
 
-create policy "Clients can delete cards from their boards"
+create policy "Members can delete board cards"
   on public.cards for delete
-  using (exists (select 1 from public.boards where boards.id = cards.board_id and boards.owner_id = auth.uid()));
+  using (public.can_access_board(board_id));
 
 create table public.board_columns (
   board_id uuid not null references public.boards(id) on delete cascade,
@@ -86,19 +150,19 @@ create index board_columns_board_position_idx on public.board_columns (board_id,
 
 alter table public.board_columns enable row level security;
 
-create policy "Clients can read columns from their boards"
+create policy "Members can read board columns"
   on public.board_columns for select
-  using (exists (select 1 from public.boards where boards.id = board_columns.board_id and boards.owner_id = auth.uid()));
+  using (public.can_access_board(board_id));
 
-create policy "Clients can create columns in their boards"
+create policy "Members can create board columns"
   on public.board_columns for insert
-  with check (exists (select 1 from public.boards where boards.id = board_columns.board_id and boards.owner_id = auth.uid()));
+  with check (public.can_access_board(board_id));
 
-create policy "Clients can update columns from their boards"
+create policy "Members can update board columns"
   on public.board_columns for update
-  using (exists (select 1 from public.boards where boards.id = board_columns.board_id and boards.owner_id = auth.uid()))
-  with check (exists (select 1 from public.boards where boards.id = board_columns.board_id and boards.owner_id = auth.uid()));
+  using (public.can_access_board(board_id))
+  with check (public.can_access_board(board_id));
 
-create policy "Clients can delete columns from their boards"
+create policy "Members can delete board columns"
   on public.board_columns for delete
-  using (exists (select 1 from public.boards where boards.id = board_columns.board_id and boards.owner_id = auth.uid()));
+  using (public.can_access_board(board_id));

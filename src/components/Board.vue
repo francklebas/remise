@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref } from "vue";
 import Column from "@/components/Column.vue";
 import { useBoardStore } from "@/stores/board";
 import { descriptionToPlainText } from "@/editor/document";
+import { workspaceColorClass } from "@/lib/workspace-colors";
 
 const store = useBoardStore();
 const draggedCardId = ref<string | null>(null);
@@ -50,7 +51,7 @@ onMounted(() => {
   <template v-else>
   <div class="mb-7 flex items-end justify-between gap-4">
     <div>
-      <p class="mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.18em] text-primary"><span class="size-2 rounded-full bg-primary"></span>{{ store.activeWorkspace.name }}</p>
+      <p class="mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.18em] text-primary"><span class="size-2 rounded-full" :class="workspaceColorClass(store.activeWorkspace?.color)"></span>{{ store.activeWorkspace?.name }}</p>
       <h1 class="text-3xl font-black tracking-tight sm:text-4xl">Mon espace de travail</h1>
       <p class="mt-2 text-sm text-base-content/55">Organisez vos idées, une tâche à la fois.</p>
     </div>
