@@ -2,7 +2,7 @@ create table public.workspaces (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id) on delete cascade,
   name text not null default 'Personnel' check (length(trim(name)) > 0),
-  color text not null default 'primary',
+  color text not null default 'primary' constraint workspaces_color_known check (color in ('primary', 'orange', 'red', 'pink', 'violet', 'blue', 'green')),
   created_at timestamptz not null default now()
 );
 
