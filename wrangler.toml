@@ -14,3 +14,4 @@ bucket_name = "remise-card-images"
 # Set these as Worker secrets before deployment:
 # wrangler secret put SUPABASE_URL
 # wrangler secret put SUPABASE_ANON_KEY
+# wrangler secret put SUPABASE_SERVICE_ROLE_KEY  (records image sizes for storage quotas)

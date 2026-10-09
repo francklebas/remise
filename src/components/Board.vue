@@ -66,7 +66,11 @@ onUnmounted(() => window.removeEventListener("popstate", onHistoryChange));
       <span class="size-2 rounded-full bg-success"></span>{{ visibleCardCount }}<template v-if="store.searchQuery"> / {{ totalCardCount }}</template> tâches
     </div>
   </div>
-  <div id="board" class="flex items-start gap-5 overflow-x-auto pb-5">
+  <div v-if="!store.activeBoardId" class="rounded-2xl border border-dashed border-base-content/20 bg-base-100/60 px-8 py-10 text-center">
+    <p class="font-bold">Aucun board dans cet espace</p>
+    <p class="mt-1 text-sm text-base-content/55">Créez un board, ou libérez-en un dans un autre espace si votre plan est complet.</p>
+  </div>
+  <div v-else id="board" class="flex items-start gap-5 overflow-x-auto pb-5">
     <Column
       v-for="column in visibleColumns"
       :key="column.id"

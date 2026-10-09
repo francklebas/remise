@@ -2,7 +2,7 @@
 import { computed, nextTick, ref } from "vue";
 import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Plus, Trash2 } from "@lucide/vue";
 import { useBoardStore } from "@/stores/board";
-import { boardPath } from "@/router";
+import { boardPath, navigate } from "@/router";
 import type { BoardSummary } from "@/types/board";
 
 const store = useBoardStore();
@@ -84,7 +84,10 @@ function confirmDelete(board: BoardSummary) {
       </div>
     </nav>
 
-    <div v-if="store.boardError" role="alert" class="alert alert-error py-2 text-sm"><span>{{ store.boardError }}</span></div>
+    <div v-if="store.boardError" role="alert" class="alert py-2 text-sm" :class="store.boardQuotaReached ? 'alert-warning' : 'alert-error'">
+      <span>{{ store.boardError }}</span>
+      <a v-if="store.boardQuotaReached" href="/user?tab=plan" class="btn btn-sm" @click.prevent="navigate('/user?tab=plan')">Voir les plans</a>
+    </div>
     <div v-if="store.activeBoard?.archivedAt" role="status" class="alert alert-warning py-2 text-sm">
       <span>Ce board est archivé.</span>
       <button class="btn btn-sm" @click="store.restoreBoard(store.activeBoard.id)"><ArchiveRestore :size="15" /> Restaurer</button>

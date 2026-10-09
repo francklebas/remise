@@ -1,15 +1,18 @@
 <script lang="ts" setup>
 import { ref } from "vue";
-import { ArrowLeft, Settings, UserRound } from "@lucide/vue";
+import { ArrowLeft, Gauge, Settings, UserRound } from "@lucide/vue";
+import PlanUsage from "@/components/PlanUsage.vue";
 import { boardPath, navigate } from "@/router";
 import { useAuthStore } from "@/stores/auth";
 import { useBoardStore } from "@/stores/board";
 
-type UserTab = "profile" | "notifications" | "settings";
+type UserTab = "profile" | "plan" | "notifications" | "settings";
+const tabs: UserTab[] = ["profile", "plan", "notifications", "settings"];
 
 const auth = useAuthStore();
 const board = useBoardStore();
-const activeTab = ref<UserTab>("profile");
+const requestedTab = new URLSearchParams(window.location.search).get("tab") as UserTab | null;
+const activeTab = ref<UserTab>(requestedTab && tabs.includes(requestedTab) ? requestedTab : "profile");
 
 const isDeletingAccount = ref(false);
 const deletePassword = ref("");
@@ -45,6 +48,9 @@ function goBack() {
     <div role="tablist" class="tabs tabs-boxed mb-6 w-fit gap-1 bg-base-100 p-1">
       <button role="tab" class="tab gap-2" :class="{ 'tab-active': activeTab === 'profile' }" @click="activeTab = 'profile'">
         <UserRound :size="16" /> Données utilisateur
+      </button>
+      <button role="tab" class="tab gap-2" :class="{ 'tab-active': activeTab === 'plan' }" @click="activeTab = 'plan'">
+        <Gauge :size="16" /> Abonnement
       </button>
       <button role="tab" class="tab gap-2" :class="{ 'tab-active': activeTab === 'settings' }" @click="activeTab = 'settings'">
         <Settings :size="16" /> Configuration
@@ -82,6 +88,8 @@ function goBack() {
         </form>
       </div>
     </section>
+
+    <PlanUsage v-else-if="activeTab === 'plan'" />
 
     <section v-else-if="activeTab === 'notifications'" class="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm">
       <div class="mb-6 flex items-center gap-4"><div class="grid size-12 place-items-center rounded-xl bg-base-200 text-xl">🔔</div><div><h2 class="font-black">Notifications</h2><p class="text-sm text-base-content/55">Recevez un e-mail lorsqu’une tâche est créée ou modifiée.</p></div></div>

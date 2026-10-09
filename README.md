@@ -113,3 +113,17 @@ supabase functions deploy delete-account
 ```
 
 Deploy the media worker first so the purge route exists. Without `MEDIA_API_URL` (local development) images are not purged.
+
+## Plans and quotas
+
+Plan limits live in the `plans` table (Free: 3 boards and 500 MiB of images; Pro and Team values are provisional). The active plan comes from `subscriptions`, which only the payment webhooks write; without an active subscription an account is on Free.
+
+- The board limit is enforced by the `boards_enforce_quota` trigger, across all of the owner's workspaces.
+- The storage limit is enforced by the media worker before writing to R2. It records each upload in `media_objects` with the service role, so the worker needs that key:
+
+```sh
+wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+wrangler deploy
+```
+
+Apply the database migrations before deploying the worker: uploads are refused while the `account_usage` function or the secret is missing. Images uploaded before this change are not counted until they are reconciled (BLA-78).

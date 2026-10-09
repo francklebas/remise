@@ -55,6 +55,10 @@ function rememberLastWorkspace(userId: string, workspaceId: string) {
   }
 }
 
+function isBoardQuotaError(error: unknown) {
+  return (error as { hint?: string } | null)?.hint === "quota_boards";
+}
+
 function boardFromRow(row: BoardRow): BoardSummary {
   return { id: row.id, name: row.name, archivedAt: row.archived_at };
 }
@@ -91,6 +95,7 @@ export const useBoardStore = defineStore("board", () => {
   const activeBoard = computed(() => boards.value.find(({ id }) => id === activeBoardId.value));
   const boardError = ref<string | null>(null);
   const workspaceError = ref<string | null>(null);
+  const boardQuotaReached = ref(false);
   let loadToken = 0;
   const isLoading = ref(false);
   const loadError = ref<string | null>(null);
@@ -283,9 +288,21 @@ export const useBoardStore = defineStore("board", () => {
       await loadBoards(workspaceId);
       boardId ??= boards.value.find((board) => !board.archivedAt)?.id ?? null;
       if (!boardId) {
-        const board = await createBoardRow(workspaceId, defaultBoardName);
-        boards.value = [...boards.value, boardFromRow(board)];
-        boardId = board.id;
+        try {
+          const board = await createBoardRow(workspaceId, defaultBoardName);
+          boards.value = [...boards.value, boardFromRow(board)];
+          boardId = board.id;
+        } catch (error) {
+          if (!isBoardQuotaError(error)) throw error;
+          if (token !== loadToken) return;
+          // An empty workspace on a full plan: show it without a board.
+          activeBoardId.value = null;
+          columns.value = [];
+          saveStates.value = {};
+          showBoardError(error);
+          rememberLastWorkspace(auth.session.user.id, workspaceId);
+          return;
+        }
       }
       const content = await loadBoardContent(boardId);
       if (token !== loadToken || !content) return;
@@ -307,15 +324,22 @@ export const useBoardStore = defineStore("board", () => {
     await load(boardId, { push });
   }
 
+  function showBoardError(error: unknown) {
+    boardQuotaReached.value = isBoardQuotaError(error);
+    boardError.value = (error as { message?: string } | null)?.message ?? "Impossible de créer le board.";
+  }
+
   async function createBoard(name: string) {
     const workspaceId = activeWorkspaceId.value;
     if (!workspaceId) return;
     try {
       const board = await createBoardRow(workspaceId, name.trim() || newBoardName);
+      boardError.value = null;
+      boardQuotaReached.value = false;
       boards.value = [...boards.value, boardFromRow(board)];
       await openBoard(board.id);
     } catch (error) {
-      loadError.value = error instanceof Error ? error.message : "Impossible de créer le board.";
+      showBoardError(error);
     }
   }
 
@@ -380,6 +404,7 @@ export const useBoardStore = defineStore("board", () => {
   }
 
   function addColumn() {
+    if (!activeBoardId.value) return;
     const column: Column = { id: v4(), title: "Nouvelle colonne", cards: [] };
     columns.value.push(column);
     if (supabase && activeBoardId.value) {
@@ -527,5 +552,5 @@ export const useBoardStore = defineStore("board", () => {
     });
   }
 
-  return { columns, workspaces, activeWorkspace, activeWorkspaceId, boards, activeBoard, activeBoardId, searchQuery, isLoading, loadError, boardError, workspaceError, saveStates, selectWorkspace, createWorkspace, updateWorkspace, deleteWorkspace, load, openBoard, createBoard, renameBoard, archiveBoard, restoreBoard, deleteBoard, addColumn, updateColumn, removeColumn, addCard, updateCard, removeCard, moveCard, flushCard, retryCard };
+  return { columns, workspaces, activeWorkspace, activeWorkspaceId, boards, activeBoard, activeBoardId, searchQuery, isLoading, loadError, boardError, boardQuotaReached, workspaceError, saveStates, selectWorkspace, createWorkspace, updateWorkspace, deleteWorkspace, load, openBoard, createBoard, renameBoard, archiveBoard, restoreBoard, deleteBoard, addColumn, updateColumn, removeColumn, addCard, updateCard, removeCard, moveCard, flushCard, retryCard };
 });
