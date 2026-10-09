@@ -5,7 +5,8 @@ import type { BoardSummary, Card, CardComplexity, CardSaveStatus, Column, TaskNo
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { currentBoardId, setBoardUrl } from "@/router";
-import { descriptionToPlainText, documentToJSON, emptyDocument, normalizeDescription } from "@/editor/document";
+import { descriptionStoragePaths, descriptionToPlainText, documentToJSON, emptyDocument, normalizeDescription } from "@/editor/document";
+import { deleteImages } from "@/editor/media";
 
 const saveDelay = 700;
 const columnDefinitions: Array<Pick<Column, "id" | "title">> = [
@@ -35,6 +36,24 @@ type BoardRow = { id: string; workspace_id: string; name: string; archived_at: s
 const boardFields = "id, workspace_id, name, archived_at";
 const defaultBoardName = "Mon espace de travail";
 const newBoardName = "Nouveau board";
+
+const lastWorkspaceKey = (userId: string) => `remise:last-workspace:${userId}`;
+
+function readLastWorkspace(userId: string) {
+  try {
+    return window.localStorage.getItem(lastWorkspaceKey(userId));
+  } catch {
+    return null;
+  }
+}
+
+function rememberLastWorkspace(userId: string, workspaceId: string) {
+  try {
+    window.localStorage.setItem(lastWorkspaceKey(userId), workspaceId);
+  } catch {
+    // Storage can be unavailable (private mode); the first workspace is used instead.
+  }
+}
 
 function boardFromRow(row: BoardRow): BoardSummary {
   return { id: row.id, name: row.name, archivedAt: row.archived_at };
@@ -71,6 +90,7 @@ export const useBoardStore = defineStore("board", () => {
   const boards = ref<BoardSummary[]>([]);
   const activeBoard = computed(() => boards.value.find(({ id }) => id === activeBoardId.value));
   const boardError = ref<string | null>(null);
+  const workspaceError = ref<string | null>(null);
   let loadToken = 0;
   const isLoading = ref(false);
   const loadError = ref<string | null>(null);
@@ -179,7 +199,10 @@ export const useBoardStore = defineStore("board", () => {
       rows = [created as Workspace];
     }
     workspaces.value = rows;
-    if (!rows.some(({ id }) => id === activeWorkspaceId.value)) activeWorkspaceId.value = rows[0]!.id;
+    if (!rows.some(({ id }) => id === activeWorkspaceId.value)) {
+      const remembered = readLastWorkspace(userId);
+      activeWorkspaceId.value = rows.find(({ id }) => id === remembered)?.id ?? rows[0]!.id;
+    }
   }
 
   async function createBoardRow(workspaceId: string, name: string) {
@@ -267,6 +290,7 @@ export const useBoardStore = defineStore("board", () => {
       const content = await loadBoardContent(boardId);
       if (token !== loadToken || !content) return;
       activeBoardId.value = boardId;
+      rememberLastWorkspace(auth.session.user.id, workspaceId);
       columns.value = content.columns;
       saveStates.value = content.saveStates;
       if (currentBoardId() !== boardId) setBoardUrl(boardId, { replace: !push });
@@ -332,15 +356,24 @@ export const useBoardStore = defineStore("board", () => {
     return updateBoard(boardId, { archived_at: null });
   }
 
+  async function storagePathsOfBoards(boardIds: string[]) {
+    if (!supabase || !boardIds.length) return [];
+    const { data, error } = await supabase.from("cards").select("description").in("board_id", boardIds);
+    if (error) throw error;
+    return ((data ?? []) as Array<{ description: unknown }>).flatMap(({ description }) => descriptionStoragePaths(description));
+  }
+
   async function deleteBoard(boardId: string) {
     if (!supabase) return;
     if (boardId === activeBoardId.value) await flushAllCards();
+    const imagePaths = await storagePathsOfBoards([boardId]).catch(() => []);
     const { error } = await supabase.from("boards").delete().eq("id", boardId);
     if (error) {
       boardError.value = error.message;
       return;
     }
     boardError.value = null;
+    void deleteImages(imagePaths);
     const wasActive = boardId === activeBoardId.value;
     boards.value = boards.value.filter(({ id }) => id !== boardId);
     if (wasActive) await leaveBoard(boardId);
@@ -432,6 +465,59 @@ export const useBoardStore = defineStore("board", () => {
     }
   }
 
+  async function createWorkspace(name: string, color: string) {
+    if (!supabase || !auth.session?.user) return false;
+    const { data, error } = await supabase.from("workspaces").insert({ owner_id: auth.session.user.id, name: name.trim(), color }).select("id, name, color").single();
+    if (error) {
+      workspaceError.value = error.message;
+      return false;
+    }
+    workspaceError.value = null;
+    workspaces.value = [...workspaces.value, data as Workspace];
+    selectWorkspace((data as Workspace).id);
+    return true;
+  }
+
+  async function updateWorkspace(id: string, patch: Pick<Workspace, "name" | "color">) {
+    if (!supabase) return false;
+    const { error } = await supabase.from("workspaces").update({ name: patch.name.trim(), color: patch.color }).eq("id", id);
+    if (error) {
+      workspaceError.value = error.message;
+      return false;
+    }
+    workspaceError.value = null;
+    workspaces.value = workspaces.value.map((workspace) => workspace.id === id ? { ...workspace, name: patch.name.trim(), color: patch.color } : workspace);
+    return true;
+  }
+
+  async function deleteWorkspace(id: string) {
+    if (!supabase || workspaces.value.length <= 1) return false;
+    const isActive = id === activeWorkspaceId.value;
+    if (isActive) await flushAllCards();
+    let imagePaths: string[] = [];
+    try {
+      const { data, error } = await supabase.from("boards").select("id").eq("workspace_id", id);
+      if (error) throw error;
+      imagePaths = await storagePathsOfBoards(((data ?? []) as Array<{ id: string }>).map((board) => board.id));
+    } catch {
+      // Image cleanup is best effort; deleting the data must not depend on it.
+    }
+    const { error } = await supabase.from("workspaces").delete().eq("id", id);
+    if (error) {
+      workspaceError.value = error.message;
+      return false;
+    }
+    workspaceError.value = null;
+    void deleteImages(imagePaths);
+    workspaces.value = workspaces.value.filter((workspace) => workspace.id !== id);
+    if (isActive) {
+      activeWorkspaceId.value = workspaces.value[0]?.id ?? null;
+      activeBoardId.value = null;
+      await load(null, { push: true });
+    }
+    return true;
+  }
+
   function selectWorkspace(id: string) {
     if (id === activeWorkspaceId.value || !workspaces.value.some((workspace) => workspace.id === id)) return;
     void flushAllCards().then(() => {
@@ -441,5 +527,5 @@ export const useBoardStore = defineStore("board", () => {
     });
   }
 
-  return { columns, workspaces, activeWorkspace, activeWorkspaceId, boards, activeBoard, activeBoardId, searchQuery, isLoading, loadError, boardError, saveStates, selectWorkspace, load, openBoard, createBoard, renameBoard, archiveBoard, restoreBoard, deleteBoard, addColumn, updateColumn, removeColumn, addCard, updateCard, removeCard, moveCard, flushCard, retryCard };
+  return { columns, workspaces, activeWorkspace, activeWorkspaceId, boards, activeBoard, activeBoardId, searchQuery, isLoading, loadError, boardError, workspaceError, saveStates, selectWorkspace, createWorkspace, updateWorkspace, deleteWorkspace, load, openBoard, createBoard, renameBoard, archiveBoard, restoreBoard, deleteBoard, addColumn, updateColumn, removeColumn, addCard, updateCard, removeCard, moveCard, flushCard, retryCard };
 });

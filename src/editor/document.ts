@@ -61,3 +61,12 @@ export function descriptionToPlainText(description: CardDescription): string {
   const document = documentFromDescription(description);
   return document.textBetween(0, document.content.size, "\n");
 }
+
+/** R2 keys of the uploaded images referenced by a stored description. */
+export function descriptionStoragePaths(description: unknown): string[] {
+  const paths: string[] = [];
+  normalizeDescription(description).descendants((node) => {
+    if (node.type.name === "image" && typeof node.attrs.storagePath === "string") paths.push(node.attrs.storagePath);
+  });
+  return paths;
+}

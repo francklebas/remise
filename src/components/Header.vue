@@ -1,12 +1,30 @@
 <script lang="ts" setup>
 import { useBoardStore } from "@/stores/board";
-import { Check, ChevronDown, LayoutDashboard, LogOut, Plus, Search, Sparkles, UserRound } from "@lucide/vue";
+import { ref } from "vue";
+import { Check, ChevronDown, LayoutDashboard, LogOut, Pencil, Plus, Search, Sparkles, UserRound } from "@lucide/vue";
+import WorkspaceDialog from "@/components/WorkspaceDialog.vue";
+import type { Workspace } from "@/types/board";
 import { useAuthStore } from "@/stores/auth";
 import { navigate } from "@/router";
 import { workspaceColorClass } from "@/lib/workspace-colors";
 
 const store = useBoardStore();
 const auth = useAuthStore();
+const workspaceDialog = ref<InstanceType<typeof WorkspaceDialog> | null>(null);
+
+function closeMenu() {
+  (document.activeElement as HTMLElement | null)?.blur();
+}
+
+function openWorkspaceDialog(workspace: Workspace | null = null) {
+  closeMenu();
+  void workspaceDialog.value?.open(workspace);
+}
+
+function selectWorkspace(id: string) {
+  closeMenu();
+  store.selectWorkspace(id);
+}
 </script>
 
 <template>
@@ -25,13 +43,14 @@ const auth = useAuthStore();
           </button>
           <ul tabindex="0" class="menu dropdown-content z-20 mt-2 w-60 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl">
             <li class="menu-title px-3 pb-1 pt-2 text-[10px] uppercase tracking-wider">Espaces de travail</li>
-            <li v-for="workspace in store.workspaces" :key="workspace.id">
-              <button class="flex justify-between" @click="store.selectWorkspace(workspace.id)">
-                <span class="flex items-center gap-2"><span class="size-2.5 rounded-full" :class="workspaceColorClass(workspace.color)"></span>{{ workspace.name }}</span>
-                <Check v-if="workspace.id === store.activeWorkspaceId" :size="15" class="text-primary" />
+            <li v-for="workspace in store.workspaces" :key="workspace.id" class="flex-row flex-nowrap items-center">
+              <button class="flex min-w-0 flex-1 justify-between" @click="selectWorkspace(workspace.id)">
+                <span class="flex min-w-0 items-center gap-2"><span class="size-2.5 shrink-0 rounded-full" :class="workspaceColorClass(workspace.color)"></span><span class="truncate">{{ workspace.name }}</span></span>
+                <Check v-if="workspace.id === store.activeWorkspaceId" :size="15" class="shrink-0 text-primary" />
               </button>
+              <button class="btn btn-ghost btn-xs px-1" :aria-label="`Modifier l’espace ${workspace.name}`" title="Modifier" @click="openWorkspaceDialog(workspace)"><Pencil :size="14" /></button>
             </li>
-            <li><button class="mt-1 border-t border-base-300 pt-3 text-primary"><Plus :size="15" /> Nouvel espace</button></li>
+            <li><button class="mt-1 border-t border-base-300 pt-3 text-primary" @click="openWorkspaceDialog()"><Plus :size="15" /> Nouvel espace</button></li>
           </ul>
         </div>
       </div>
@@ -54,5 +73,6 @@ const auth = useAuthStore();
         <button class="btn btn-circle btn-ghost btn-sm" aria-label="Se déconnecter" title="Se déconnecter" @click="auth.signOut"><LogOut :size="18" /></button>
       </div>
     </div>
+    <WorkspaceDialog ref="workspaceDialog" />
   </header>
 </template>

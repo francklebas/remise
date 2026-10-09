@@ -41,6 +41,22 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
   return { file: output, previewUrl: URL.createObjectURL(output) };
 }
 
+function mediaApiUrl() {
+  return import.meta.env.VITE_MEDIA_API_URL ?? (import.meta.env.PROD ? "https://media.boardly.francklebas.com/api/media" : "/api/media");
+}
+
+/** Best-effort removal of uploaded images; leftovers are reconciled server-side later. */
+export async function deleteImages(storagePaths: string[]): Promise<void> {
+  if (!supabase || !storagePaths.length) return;
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return;
+  const mediaApi = mediaApiUrl();
+  await Promise.allSettled([...new Set(storagePaths)].map((path) =>
+    fetch(`${mediaApi}/${path.split("/").map(encodeURIComponent).join("/")}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }),
+  ));
+}
+
 export async function uploadImage(file: File, cardId: string) {
   if (!supabase) throw new ImageUploadError("Service média indisponible.");
   const { data } = await supabase.auth.getSession();
@@ -50,8 +66,7 @@ export async function uploadImage(file: File, cardId: string) {
   form.set("file", file);
   form.set("cardId", cardId);
   form.set("extension", extensionFor(file.type));
-  const mediaApi = import.meta.env.VITE_MEDIA_API_URL ?? (import.meta.env.PROD ? "https://media.boardly.francklebas.com/api/media" : "/api/media");
-  const response = await fetch(mediaApi, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+  const response = await fetch(mediaApiUrl(), { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
   if (!response.ok) throw new ImageUploadError((await response.json().catch(() => null))?.error ?? "Upload de l’image impossible.");
   return response.json() as Promise<{ storagePath: string; src: string }>;
 }
