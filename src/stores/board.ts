@@ -29,6 +29,8 @@ type CardRow = {
 
 type ColumnRow = { id: string; title: string; position: number };
 
+const defaultWorkspace: Pick<Workspace, "name" | "color"> = { name: "Personnel", color: "primary" };
+
 function emptyColumns(): Column[] {
   return columnDefinitions.map((column) => ({ ...column, cards: [] }));
 }
@@ -50,8 +52,8 @@ function fromRow(row: CardRow): Card {
 
 export const useBoardStore = defineStore("board", () => {
   const auth = useAuthStore();
-  const workspaces: Workspace[] = [{ id: "personal", name: "Personnel", color: "bg-primary" }];
-  const activeWorkspaceId = ref("personal");
+  const workspaces = ref<Workspace[]>([]);
+  const activeWorkspaceId = ref<string | null>(null);
   const searchQuery = ref("");
   const columns = ref<Column[]>(emptyColumns());
   const activeBoardId = ref<string | null>(null);
@@ -62,7 +64,7 @@ export const useBoardStore = defineStore("board", () => {
   const saveChains = new Map<string, Promise<void>>();
   const versions = new Map<string, number>();
   const unsavedCards = new Set<string>();
-  const activeWorkspace = computed(() => workspaces.find(({ id }) => id === activeWorkspaceId.value) ?? workspaces[0]);
+  const activeWorkspace = computed(() => workspaces.value.find(({ id }) => id === activeWorkspaceId.value));
 
   function findCard(cardId: string) {
     for (const column of columns.value) {
@@ -141,9 +143,28 @@ export const useBoardStore = defineStore("board", () => {
     void persistCard(cardId, versions.get(cardId) ?? 0);
   }
 
+  async function flushAllCards() {
+    for (const cardId of [...saveTimers.keys()]) flushCard(cardId);
+    await Promise.allSettled([...saveChains.values()]);
+  }
+
   function retryCard(cardId: string) {
     if (!findCard(cardId)) return;
     scheduleSave(cardId);
+  }
+
+  async function loadWorkspaces(userId: string) {
+    if (!supabase) return;
+    const { data, error } = await supabase.from("workspaces").select("id, name, color").order("created_at");
+    if (error) throw error;
+    let rows = (data ?? []) as Workspace[];
+    if (!rows.length) {
+      const { data: created, error: createError } = await supabase.from("workspaces").insert({ owner_id: userId, ...defaultWorkspace }).select("id, name, color").single();
+      if (createError) throw createError;
+      rows = [created as Workspace];
+    }
+    workspaces.value = rows;
+    if (!rows.some(({ id }) => id === activeWorkspaceId.value)) activeWorkspaceId.value = rows[0]!.id;
   }
 
   async function load() {
@@ -151,11 +172,14 @@ export const useBoardStore = defineStore("board", () => {
     isLoading.value = true;
     loadError.value = null;
     try {
-      const { data: existingBoard, error: boardError } = await supabase.from("boards").select("id").order("created_at").limit(1).maybeSingle();
+      await loadWorkspaces(auth.session.user.id);
+      const workspaceId = activeWorkspaceId.value;
+      if (!workspaceId) throw new Error("Impossible de charger l’espace de travail.");
+      const { data: existingBoard, error: boardError } = await supabase.from("boards").select("id").eq("workspace_id", workspaceId).order("created_at").limit(1).maybeSingle();
       if (boardError) throw boardError;
       let board = existingBoard;
       if (!board) {
-        const { data, error } = await supabase.from("boards").insert({ owner_id: auth.session.user.id, name: "Mon espace de travail" }).select("id").single();
+        const { data, error } = await supabase.from("boards").insert({ workspace_id: workspaceId, name: "Mon espace de travail" }).select("id").single();
         if (error) throw error;
         board = data;
       }
@@ -286,7 +310,11 @@ export const useBoardStore = defineStore("board", () => {
   }
 
   function selectWorkspace(id: string) {
-    if (workspaces.some((workspace) => workspace.id === id)) activeWorkspaceId.value = id;
+    if (id === activeWorkspaceId.value || !workspaces.value.some((workspace) => workspace.id === id)) return;
+    void flushAllCards().then(() => {
+      activeWorkspaceId.value = id;
+      return load();
+    });
   }
 
   return { columns, workspaces, activeWorkspace, activeWorkspaceId, activeBoardId, searchQuery, isLoading, loadError, saveStates, selectWorkspace, load, addColumn, updateColumn, removeColumn, addCard, updateCard, removeCard, moveCard, flushCard, retryCard };
