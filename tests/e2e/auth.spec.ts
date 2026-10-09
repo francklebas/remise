@@ -31,6 +31,7 @@ test("a user can confirm an account and sign in with a password", async ({
   await page.getByRole("tab", { name: "Créer un compte" }).click();
   await page.getByLabel("Adresse e-mail").fill(email);
   await page.getByLabel("Mot de passe").fill(password);
+  await page.getByRole("checkbox", { name: /J’accepte les conditions/ }).check();
   await page.getByRole("button", { name: "Créer mon compte" }).click();
 
   await expect(page.getByText("Votre compte a été créé.")).toBeVisible();

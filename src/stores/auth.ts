@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { TERMS_VERSION } from "@/legal";
 import { applyTheme, normalizeThemePreference, type ThemePreference } from "@/theme";
 
 export const useAuthStore = defineStore("auth", () => {
@@ -87,6 +88,7 @@ export const useAuthStore = defineStore("auth", () => {
       options: {
         emailRedirectTo: window.location.origin,
         captchaToken,
+        data: { terms_version: TERMS_VERSION, terms_accepted_at: new Date().toISOString() },
       },
     });
     if (signUpError) error.value = signUpError.message;

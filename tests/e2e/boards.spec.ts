@@ -23,6 +23,7 @@ test("manages several boards in a workspace, each with its own URL", async ({ pa
   await page.getByRole("tab", { name: "Créer un compte" }).click();
   await page.getByLabel("Adresse e-mail").fill(email);
   await page.getByLabel("Mot de passe").fill(password);
+  await page.getByRole("checkbox", { name: /J’accepte les conditions/ }).check();
   await page.getByRole("button", { name: "Créer mon compte" }).click();
   await page.goto((await confirmationUrlFor(request, email))!);
   await expect(page.getByRole("heading", { name: "Mon espace de travail" })).toBeVisible();

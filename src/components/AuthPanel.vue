@@ -4,9 +4,11 @@ import { ArrowRight, Mail } from "@lucide/vue";
 import { useAuthStore } from "@/stores/auth";
 import { supabase } from "@/lib/supabase";
 import { navigate, passwordResetRedirectTo } from "@/router";
+import { legalLinks } from "@/legal";
 
 const auth = useAuthStore();
 const mode = ref<"signIn" | "signUp">("signIn");
+const acceptsTerms = ref(false);
 const email = ref("");
 const password = ref("");
 const isSending = ref(false);
@@ -206,6 +208,10 @@ function showLogin() {
             class="input input-bordered w-full"
           />
         </label>
+        <label v-if="mode === 'signUp' && !isForgotPassword" class="flex items-start gap-3 text-sm">
+          <input v-model="acceptsTerms" type="checkbox" required class="checkbox checkbox-primary checkbox-sm mt-0.5" />
+          <span>J’accepte les <a href="/conditions" target="_blank" class="link link-primary">conditions d’utilisation</a> et la <a href="/confidentialite" target="_blank" class="link link-primary">politique de confidentialité</a>.</span>
+        </label>
         <div v-if="!isForgotPassword"
           ref="turnstileContainer"
           class="flex min-h-[65px] justify-start overflow-hidden"
@@ -246,6 +252,9 @@ function showLogin() {
       >
         {{ auth.error }}
       </div>
+      <nav class="mt-8 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-base-content/50" aria-label="Informations légales">
+        <a v-for="link in legalLinks" :key="link.path" :href="link.path" class="link link-hover" @click.prevent="navigate(link.path)">{{ link.label }}</a>
+      </nav>
     </section>
   </main>
 </template>
