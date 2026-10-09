@@ -1,9 +1,11 @@
 <script lang="ts" setup>
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import BoardSwitcher from "@/components/BoardSwitcher.vue";
 import Column from "@/components/Column.vue";
 import { useBoardStore } from "@/stores/board";
 import { descriptionToPlainText } from "@/editor/document";
 import { workspaceColorClass } from "@/lib/workspace-colors";
+import { currentBoardId } from "@/router";
 
 const store = useBoardStore();
 const draggedCardId = ref<string | null>(null);
@@ -38,23 +40,28 @@ const dropCard = (targetColumnId: string, targetIndex: number) => {
   stopDragging();
 };
 
+const onHistoryChange = () => {
+  const boardId = currentBoardId();
+  if (boardId) void store.openBoard(boardId, { push: false });
+};
+
 onMounted(() => {
+  window.addEventListener("popstate", onHistoryChange);
   void store.load();
   const cardId = new URLSearchParams(window.location.search).get("card");
   if (cardId) void nextTick(() => document.getElementById(cardId)?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }));
 });
+onUnmounted(() => window.removeEventListener("popstate", onHistoryChange));
 </script>
 
 <template>
   <div v-if="store.isLoading" class="grid min-h-72 place-items-center"><span class="loading loading-spinner loading-md text-primary" aria-label="Chargement des cartes" /></div>
-  <div v-else-if="store.loadError" class="alert alert-error"><span>{{ store.loadError }}</span><button class="btn btn-sm" @click="store.load">Réessayer</button></div>
+  <div v-else-if="store.loadError" class="alert alert-error"><span>{{ store.loadError }}</span><button class="btn btn-sm" @click="store.load()">Réessayer</button></div>
   <template v-else>
-  <div class="mb-7 flex items-end justify-between gap-4">
-    <div>
-      <p class="mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.18em] text-primary"><span class="size-2 rounded-full" :class="workspaceColorClass(store.activeWorkspace?.color)"></span>{{ store.activeWorkspace?.name }}</p>
-      <h1 class="text-3xl font-black tracking-tight sm:text-4xl">Mon espace de travail</h1>
-      <p class="mt-2 text-sm text-base-content/55">Organisez vos idées, une tâche à la fois.</p>
-    </div>
+  <p class="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.18em] text-primary"><span class="size-2 rounded-full" :class="workspaceColorClass(store.activeWorkspace?.color)"></span>{{ store.activeWorkspace?.name }}</p>
+  <BoardSwitcher />
+  <div class="-mt-3 mb-7 flex items-end justify-between gap-4">
+    <p class="text-sm text-base-content/55">Organisez vos idées, une tâche à la fois.</p>
     <div class="hidden items-center gap-2 text-sm font-semibold text-base-content/50 sm:flex">
       <span class="size-2 rounded-full bg-success"></span>{{ visibleCardCount }}<template v-if="store.searchQuery"> / {{ totalCardCount }}</template> tâches
     </div>

@@ -23,6 +23,12 @@ export type CardComplexity = "low" | "medium" | "high";
 
 export type TaskNotificationAction = "created" | "updated";
 
+export interface BoardSummary {
+  id: string;
+  name: string;
+  archivedAt: string | null;
+}
+
 export interface Workspace {
   id: string;
   name: string;

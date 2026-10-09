@@ -1,16 +1,18 @@
 <script lang="ts" setup>
 import { ref } from "vue";
 import { ArrowLeft, Settings, UserRound } from "@lucide/vue";
-import { navigate } from "@/router";
+import { boardPath, navigate } from "@/router";
 import { useAuthStore } from "@/stores/auth";
+import { useBoardStore } from "@/stores/board";
 
 type UserTab = "profile" | "notifications" | "settings";
 
 const auth = useAuthStore();
+const board = useBoardStore();
 const activeTab = ref<UserTab>("profile");
 
 function goBack() {
-  navigate("/");
+  navigate(board.activeBoardId ? boardPath(board.activeBoardId) : "/");
 }
 </script>
 

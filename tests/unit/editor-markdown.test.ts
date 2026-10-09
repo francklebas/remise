@@ -17,7 +17,7 @@ import { detectDocumentFormat, DocumentImportError, importDocumentFile, insertIm
 import { codeHighlightPluginKey, highlightCode, resolveHighlightLanguage } from "@/editor/code-highlight";
 import { copyCodeBlockText } from "@/editor/code-block-view";
 import { MAX_IMAGE_BYTES, ImageUploadError, prepareImage } from "@/editor/media";
-import { currentRoute, passwordResetRedirectTo } from "@/router";
+import { boardPath, currentBoardId, currentRoute, passwordResetRedirectTo } from "@/router";
 
 function roundTripMarkdown(markdown: string) {
   return markdownToDocument(documentToMarkdown(markdownToDocument(markdown)));
@@ -96,6 +96,17 @@ describe("ProseMirror editorial document", () => {
     window.history.replaceState({}, "", "/reset-password");
     expect(currentRoute()).toBe("/reset-password");
     expect(passwordResetRedirectTo()).toBe(`${window.location.origin}/reset-password`);
+    window.history.replaceState({}, "", previousPath);
+  });
+
+  it("reads the active board from its URL", () => {
+    const previousPath = window.location.pathname;
+    const boardId = "0b6f8f4e-3a51-4c1e-9d0a-5f2a8f7c1d2e";
+    window.history.replaceState({}, "", boardPath(boardId));
+    expect(currentRoute()).toBe("/");
+    expect(currentBoardId()).toBe(boardId);
+    window.history.replaceState({}, "", "/b/not-a-board");
+    expect(currentBoardId()).toBeNull();
     window.history.replaceState({}, "", previousPath);
   });
 
