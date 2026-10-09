@@ -47,7 +47,8 @@ grant execute on function public.can_access_workspace(uuid) to authenticated;
 create table public.boards (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
-  name text not null default 'Mon espace de travail',
+  name text not null default 'Mon espace de travail' constraint boards_name_not_blank check (length(trim(name)) > 0),
+  archived_at timestamptz,
   created_at timestamptz not null default now()
 );
 

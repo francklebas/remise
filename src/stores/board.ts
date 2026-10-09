@@ -1,9 +1,10 @@
 import { defineStore } from "pinia";
 import { v4 } from "uuid";
 import { computed, ref } from "vue";
-import type { Card, CardComplexity, CardSaveStatus, Column, TaskNotificationAction, Workspace } from "@/types/board";
+import type { BoardSummary, Card, CardComplexity, CardSaveStatus, Column, TaskNotificationAction, Workspace } from "@/types/board";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { currentBoardId, setBoardUrl } from "@/router";
 import { descriptionToPlainText, documentToJSON, emptyDocument, normalizeDescription } from "@/editor/document";
 
 const saveDelay = 700;
@@ -28,6 +29,16 @@ type CardRow = {
 };
 
 type ColumnRow = { id: string; title: string; position: number };
+
+type BoardRow = { id: string; workspace_id: string; name: string; archived_at: string | null };
+
+const boardFields = "id, workspace_id, name, archived_at";
+const defaultBoardName = "Mon espace de travail";
+const newBoardName = "Nouveau board";
+
+function boardFromRow(row: BoardRow): BoardSummary {
+  return { id: row.id, name: row.name, archivedAt: row.archived_at };
+}
 
 const defaultWorkspace: Pick<Workspace, "name" | "color"> = { name: "Personnel", color: "primary" };
 
@@ -57,6 +68,10 @@ export const useBoardStore = defineStore("board", () => {
   const searchQuery = ref("");
   const columns = ref<Column[]>(emptyColumns());
   const activeBoardId = ref<string | null>(null);
+  const boards = ref<BoardSummary[]>([]);
+  const activeBoard = computed(() => boards.value.find(({ id }) => id === activeBoardId.value));
+  const boardError = ref<string | null>(null);
+  let loadToken = 0;
   const isLoading = ref(false);
   const loadError = ref<string | null>(null);
   const saveStates = ref<Record<string, CardSaveStatus>>({});
@@ -167,60 +182,168 @@ export const useBoardStore = defineStore("board", () => {
     if (!rows.some(({ id }) => id === activeWorkspaceId.value)) activeWorkspaceId.value = rows[0]!.id;
   }
 
-  async function load() {
+  async function createBoardRow(workspaceId: string, name: string) {
+    if (!supabase) throw new Error("Supabase n’est pas configuré.");
+    const { data, error } = await supabase.from("boards").insert({ workspace_id: workspaceId, name }).select(boardFields).single();
+    if (error) throw error;
+    const board = data as BoardRow;
+    const { error: columnError } = await supabase
+      .from("board_columns")
+      .insert(columnDefinitions.map((column, position) => ({ board_id: board.id, ...column, position })));
+    if (columnError) throw columnError;
+    return board;
+  }
+
+  async function resolveBoard(requestedBoardId: string | null) {
+    if (!supabase) return null;
+    let candidateId = requestedBoardId;
+    const linkedCardId = new URLSearchParams(window.location.search).get("card");
+    if (!candidateId && linkedCardId) {
+      const { data } = await supabase.from("cards").select("board_id").eq("id", linkedCardId).maybeSingle();
+      candidateId = (data as { board_id: string } | null)?.board_id ?? null;
+      if (candidateId) requestedBoardId = candidateId;
+    }
+    candidateId ??= activeBoardId.value;
+    if (candidateId) {
+      const { data, error } = await supabase.from("boards").select(boardFields).eq("id", candidateId).maybeSingle();
+      if (error) throw error;
+      const board = data as BoardRow | null;
+      if (board && (requestedBoardId || board.workspace_id === activeWorkspaceId.value) && workspaces.value.some(({ id }) => id === board.workspace_id)) {
+        activeWorkspaceId.value = board.workspace_id;
+        return board.id;
+      }
+    }
+    return null;
+  }
+
+  async function loadBoards(workspaceId: string) {
+    if (!supabase) return;
+    const { data, error } = await supabase.from("boards").select(boardFields).eq("workspace_id", workspaceId).order("created_at");
+    if (error) throw error;
+    boards.value = ((data ?? []) as BoardRow[]).map(boardFromRow);
+  }
+
+  async function loadBoardContent(boardId: string) {
+    if (!supabase) return;
+    const { data: columnData, error: columnError } = await supabase.from("board_columns").select("id, title, position").eq("board_id", boardId).order("position");
+    if (columnError) throw columnError;
+    const { data, error } = await supabase
+      .from("cards")
+      .select("id, board_id, column_id, title, description, position, due_date, due_time, estimated_duration, complexity, created_at")
+      .eq("board_id", boardId)
+      .order("column_id")
+      .order("position");
+    if (error) throw error;
+    const nextColumns: Column[] = ((columnData ?? []) as ColumnRow[]).map((column) => ({ id: column.id, title: column.title, cards: [] }));
+    for (const row of (data ?? []) as CardRow[]) {
+      const card = fromRow(row);
+      let column = nextColumns.find((item) => item.id === card.columnId);
+      if (!column) {
+        column = { id: card.columnId, title: "Colonne personnalisée", cards: [] };
+        nextColumns.push(column);
+      }
+      column.cards.push(card);
+    }
+    return { columns: nextColumns, saveStates: Object.fromEntries((data ?? []).map((row: CardRow) => [row.id, "saved" as const])) };
+  }
+
+  async function load(requestedBoardId: string | null = currentBoardId(), { push = false } = {}) {
     if (!supabase || !auth.session?.user) return;
+    const token = ++loadToken;
     isLoading.value = true;
     loadError.value = null;
     try {
       await loadWorkspaces(auth.session.user.id);
+      let boardId = await resolveBoard(requestedBoardId);
       const workspaceId = activeWorkspaceId.value;
       if (!workspaceId) throw new Error("Impossible de charger l’espace de travail.");
-      const { data: existingBoard, error: boardError } = await supabase.from("boards").select("id").eq("workspace_id", workspaceId).order("created_at").limit(1).maybeSingle();
-      if (boardError) throw boardError;
-      let board = existingBoard;
-      if (!board) {
-        const { data, error } = await supabase.from("boards").insert({ workspace_id: workspaceId, name: "Mon espace de travail" }).select("id").single();
-        if (error) throw error;
-        board = data;
+      await loadBoards(workspaceId);
+      boardId ??= boards.value.find((board) => !board.archivedAt)?.id ?? null;
+      if (!boardId) {
+        const board = await createBoardRow(workspaceId, defaultBoardName);
+        boards.value = [...boards.value, boardFromRow(board)];
+        boardId = board.id;
       }
-      if (!board?.id) throw new Error("Impossible de créer le board personnel.");
-      activeBoardId.value = board.id;
-
-      let { data: columnData, error: columnError } = await supabase.from("board_columns").select("id, title, position").eq("board_id", board.id).order("position");
-      if (columnError) throw columnError;
-      if (!columnData?.length) {
-        const { data, error } = await supabase
-          .from("board_columns")
-          .insert(columnDefinitions.map((column, position) => ({ board_id: board.id, ...column, position })))
-          .select("id, title, position");
-        if (error) throw error;
-        columnData = data;
-      }
-
-      const { data, error } = await supabase
-        .from("cards")
-        .select("id, board_id, column_id, title, description, position, due_date, due_time, estimated_duration, complexity, created_at")
-        .eq("board_id", board.id)
-        .order("column_id")
-        .order("position");
-      if (error) throw error;
-      const nextColumns: Column[] = ((columnData ?? []) as ColumnRow[]).map((column) => ({ id: column.id, title: column.title, cards: [] }));
-      for (const row of (data ?? []) as CardRow[]) {
-        const card = fromRow(row);
-        let column = nextColumns.find((item) => item.id === card.columnId);
-        if (!column) {
-          column = { id: card.columnId, title: "Colonne personnalisée", cards: [] };
-          nextColumns.push(column);
-        }
-        column.cards.push(card);
-      }
-      columns.value = nextColumns;
-      saveStates.value = Object.fromEntries((data ?? []).map((row: CardRow) => [row.id, "saved"]));
+      const content = await loadBoardContent(boardId);
+      if (token !== loadToken || !content) return;
+      activeBoardId.value = boardId;
+      columns.value = content.columns;
+      saveStates.value = content.saveStates;
+      if (currentBoardId() !== boardId) setBoardUrl(boardId, { replace: !push });
     } catch (error) {
-      loadError.value = error instanceof Error ? error.message : "Impossible de charger les cartes.";
+      if (token === loadToken) loadError.value = error instanceof Error ? error.message : "Impossible de charger les cartes.";
     } finally {
-      isLoading.value = false;
+      if (token === loadToken) isLoading.value = false;
     }
+  }
+
+  async function openBoard(boardId: string | null, { push = true } = {}) {
+    if (boardId && boardId === activeBoardId.value) return;
+    await flushAllCards();
+    await load(boardId, { push });
+  }
+
+  async function createBoard(name: string) {
+    const workspaceId = activeWorkspaceId.value;
+    if (!workspaceId) return;
+    try {
+      const board = await createBoardRow(workspaceId, name.trim() || newBoardName);
+      boards.value = [...boards.value, boardFromRow(board)];
+      await openBoard(board.id);
+    } catch (error) {
+      loadError.value = error instanceof Error ? error.message : "Impossible de créer le board.";
+    }
+  }
+
+  async function updateBoard(boardId: string, patch: { name?: string; archived_at?: string | null }) {
+    if (!supabase) return false;
+    const previous = boards.value;
+    boards.value = boards.value.map((board) => board.id === boardId
+      ? { ...board, ...(patch.name !== undefined && { name: patch.name }), ...(patch.archived_at !== undefined && { archivedAt: patch.archived_at }) }
+      : board);
+    const { error } = await supabase.from("boards").update(patch).eq("id", boardId);
+    if (error) {
+      boards.value = previous;
+      boardError.value = error.message;
+      return false;
+    }
+    boardError.value = null;
+    return true;
+  }
+
+  function renameBoard(boardId: string, name: string) {
+    const trimmed = name.trim();
+    if (!trimmed || boards.value.find(({ id }) => id === boardId)?.name === trimmed) return Promise.resolve(false);
+    return updateBoard(boardId, { name: trimmed });
+  }
+
+  async function leaveBoard(boardId: string) {
+    if (boardId !== activeBoardId.value) return;
+    const next = boards.value.find((board) => board.id !== boardId && !board.archivedAt);
+    activeBoardId.value = null;
+    await load(next?.id ?? null, { push: true });
+  }
+
+  async function archiveBoard(boardId: string) {
+    if (await updateBoard(boardId, { archived_at: new Date().toISOString() })) await leaveBoard(boardId);
+  }
+
+  function restoreBoard(boardId: string) {
+    return updateBoard(boardId, { archived_at: null });
+  }
+
+  async function deleteBoard(boardId: string) {
+    if (!supabase) return;
+    if (boardId === activeBoardId.value) await flushAllCards();
+    const { error } = await supabase.from("boards").delete().eq("id", boardId);
+    if (error) {
+      boardError.value = error.message;
+      return;
+    }
+    boardError.value = null;
+    const wasActive = boardId === activeBoardId.value;
+    boards.value = boards.value.filter(({ id }) => id !== boardId);
+    if (wasActive) await leaveBoard(boardId);
   }
 
   function addColumn() {
@@ -313,9 +436,10 @@ export const useBoardStore = defineStore("board", () => {
     if (id === activeWorkspaceId.value || !workspaces.value.some((workspace) => workspace.id === id)) return;
     void flushAllCards().then(() => {
       activeWorkspaceId.value = id;
-      return load();
+      activeBoardId.value = null;
+      return load(null, { push: true });
     });
   }
 
-  return { columns, workspaces, activeWorkspace, activeWorkspaceId, activeBoardId, searchQuery, isLoading, loadError, saveStates, selectWorkspace, load, addColumn, updateColumn, removeColumn, addCard, updateCard, removeCard, moveCard, flushCard, retryCard };
+  return { columns, workspaces, activeWorkspace, activeWorkspaceId, boards, activeBoard, activeBoardId, searchQuery, isLoading, loadError, boardError, saveStates, selectWorkspace, load, openBoard, createBoard, renameBoard, archiveBoard, restoreBoard, deleteBoard, addColumn, updateColumn, removeColumn, addCard, updateCard, removeCard, moveCard, flushCard, retryCard };
 });
